@@ -51,6 +51,7 @@ export default function Dashboard() {
   const [timeRange, setTimeRange] = useState("30"); // "30" | "ytd" | "365" | "1825" | "max"
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeProviders, setActiveProviders] = useState<Record<string, any> | null>(null);
   
   // Transaction Form state
   const [showAddForm, setShowAddForm] = useState(false);
@@ -62,6 +63,12 @@ export default function Dashboard() {
   const [formFee, setFormFee] = useState("0");
   const [formDate, setFormDate] = useState(new Date().toISOString().split("T")[0]);
   const [formSubmitting, setFormSubmitting] = useState(false);
+
+  // Autocomplete states
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Import CSV state
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -85,6 +92,23 @@ export default function Dashboard() {
         .catch((err) => {
           console.error(err);
           setError(err.message);
+        });
+    }
+  }, [status]);
+
+  // Load active providers when unauthenticated
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      fetch("/api/auth/providers")
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to load providers");
+          return res.json();
+        })
+        .then((data) => {
+          setActiveProviders(data);
+        })
+        .catch((err) => {
+          console.error("Error loading auth providers:", err);
         });
     }
   }, [status]);
@@ -169,6 +193,37 @@ export default function Dashboard() {
     } catch (err: any) {
       setError(err.message);
     }
+  };
+
+  const handleSymbolChange = (value: string) => {
+    setFormSymbol(value);
+    
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (value.trim().length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    setSearching(true);
+    setShowSuggestions(true);
+    
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/finance/search?q=${encodeURIComponent(value)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSuggestions(data);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
   };
 
   const handleAddTransaction = async (e: React.FormEvent) => {
@@ -292,6 +347,15 @@ export default function Dashboard() {
     return `${symbol}${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
+  const formatDate = (dateVal: string | Date) => {
+    if (!dateVal) return "";
+    const d = new Date(dateVal);
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+  };
+
   if (status === "loading") {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-slate-950">
@@ -314,25 +378,44 @@ export default function Dashboard() {
             </p>
           </div>
           <div className="mt-8 space-y-4">
-            <button
-              onClick={() => signIn("google")}
-              className="group relative flex w-full justify-center rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white hover:bg-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 transition-all shadow-md shadow-sky-900/20"
-            >
-              Sign in with OIDC (Google)
-            </button>
-            
-            <div className="relative flex py-4 items-center">
-              <div className="flex-grow border-t border-slate-800"></div>
-              <span className="flex-shrink mx-4 text-slate-500 text-xs uppercase font-medium">Or Dev Login</span>
-              <div className="flex-grow border-t border-slate-800"></div>
-            </div>
+            {!activeProviders && (
+              <div className="flex justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
+              </div>
+            )}
 
-            <button
-              onClick={() => signIn("credentials", { email: "test@example.com", name: "Demo User" })}
-              className="flex w-full justify-center rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-300 hover:bg-slate-850 hover:text-white focus:outline-none focus:ring-2 focus:ring-slate-700 transition-all"
-            >
-              Access Demo Workspace
-            </button>
+            {activeProviders && activeProviders.oidc && (
+              <button
+                onClick={() => signIn("oidc")}
+                className="group relative flex w-full justify-center rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white hover:bg-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 transition-all shadow-md shadow-sky-900/20"
+              >
+                Sign in with {activeProviders.oidc.name || "OIDC"}
+              </button>
+            )}
+
+            {activeProviders && activeProviders.credentials && (
+              <>
+                {activeProviders.oidc && (
+                  <div className="relative flex py-4 items-center">
+                    <div className="flex-grow border-t border-slate-800"></div>
+                    <span className="flex-shrink mx-4 text-slate-500 text-xs uppercase font-medium">Or Dev Login</span>
+                    <div className="flex-grow border-t border-slate-800"></div>
+                  </div>
+                )}
+                <button
+                  onClick={() => signIn("credentials", { email: "test@example.com", name: "Demo User" })}
+                  className="flex w-full justify-center rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-300 hover:bg-slate-850 hover:text-white focus:outline-none focus:ring-2 focus:ring-slate-700 transition-all"
+                >
+                  Access Demo Workspace
+                </button>
+              </>
+            )}
+
+            {activeProviders && Object.keys(activeProviders).length === 0 && (
+              <div className="text-center py-4 text-sm text-slate-400">
+                No sign-in methods are currently enabled. Please check server configurations.
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -476,16 +559,24 @@ export default function Dashboard() {
                 <ResponsiveContainer width="100%" height="90%">
                   <LineChart data={history}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                    <XAxis dataKey="date" tickLine={false} axisLine={false} stroke="#64748b" dy={10} />
+                    <XAxis 
+                      dataKey="date" 
+                      tickFormatter={(tick) => formatDate(tick)}
+                      tickLine={false} 
+                      axisLine={false} 
+                      stroke="#64748b" 
+                      dy={10} 
+                    />
                     <YAxis tickLine={false} axisLine={false} stroke="#64748b" dx={-10} />
                     <Tooltip 
+                      labelFormatter={(label) => formatDate(label)}
                       formatter={(value: any) => fmt(value as number)}
                       contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "12px", color: "#f8fafc" }}
                     />
                     <Legend />
                     <Line type="monotone" dataKey="valuation" name="Total Value" stroke="#0ea5e9" strokeWidth={3} dot={false} activeDot={{ r: 8 }} />
                     <Line type="monotone" dataKey="invested" name="Invested Capital" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" dot={false} />
-                    <Brush dataKey="date" height={30} stroke="#1e293b" fill="#0f172a" />
+                    <Brush dataKey="date" tickFormatter={(tick) => formatDate(tick)} height={30} stroke="#1e293b" fill="#0f172a" />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
@@ -582,16 +673,54 @@ export default function Dashboard() {
               </div>
 
               <form onSubmit={handleAddTransaction} className="space-y-4">
-                <div>
+                <div className="relative">
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Ticker Symbol</label>
                   <input
                     type="text"
                     required
                     placeholder="e.g. AAPL, VWCE.DE"
                     value={formSymbol}
-                    onChange={(e) => setFormSymbol(e.target.value)}
+                    onChange={(e) => handleSymbolChange(e.target.value)}
+                    onFocus={() => { if (formSymbol.trim().length >= 2) setShowSuggestions(true); }}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                     className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
+                    autoComplete="off"
                   />
+
+                  {showSuggestions && (
+                    <div className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950 p-1 shadow-2xl">
+                      {searching && suggestions.length === 0 ? (
+                        <div className="flex items-center justify-center p-3 text-xs text-slate-500">
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" /> Searching...
+                        </div>
+                      ) : suggestions.length > 0 ? (
+                        <div className="divide-y divide-slate-900">
+                          {suggestions.map((item) => (
+                            <button
+                              key={item.symbol}
+                              type="button"
+                              onClick={() => {
+                                setFormSymbol(item.symbol);
+                                setShowSuggestions(false);
+                                setSuggestions([]);
+                              }}
+                              className="flex w-full flex-col text-left px-3 py-2 text-xs hover:bg-slate-900 transition-all rounded-lg"
+                            >
+                              <div className="flex justify-between items-center w-full">
+                                <span className="font-bold text-white">{item.symbol}</span>
+                                <span className="px-1.5 py-0.2 rounded text-[10px] font-bold uppercase bg-slate-900 text-slate-400">{item.type}</span>
+                              </div>
+                              <span className="text-[11px] text-slate-400 truncate w-full mt-0.5">{item.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : !searching && formSymbol.trim().length >= 2 ? (
+                        <div className="p-3 text-center text-xs text-slate-500">
+                          No results found
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -781,7 +910,7 @@ export default function Dashboard() {
                     return (
                       <tr key={tx.id} className="hover:bg-slate-800/20">
                         <td className="py-4 pr-4">
-                          {new Date(tx.transactionDate).toLocaleDateString()}
+                          {formatDate(tx.transactionDate)}
                         </td>
                         <td className="py-4 px-4 font-bold text-white">{tx.symbol}</td>
                         <td className="py-4 px-4">

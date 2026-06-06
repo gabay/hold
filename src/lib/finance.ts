@@ -207,3 +207,25 @@ export async function getExchangeRate(
     return 1.0;
   }
 }
+
+/**
+ * Searches symbols matching a query string
+ */
+export async function searchAssets(query: string): Promise<Array<{ symbol: string; name: string; type: string }>> {
+  if (!query || query.trim().length < 2) return [];
+  try {
+    const res = await yahooFinance.search(query);
+    if (!res || !res.quotes) return [];
+    
+    return res.quotes
+      .filter((q: any) => q.symbol && (q.quoteType === "EQUITY" || q.quoteType === "ETF" || q.quoteType === "MUTUALFUND"))
+      .map((q: any) => ({
+        symbol: q.symbol,
+        name: q.shortname || q.longname || q.symbol,
+        type: q.quoteType || "EQUITY",
+      }));
+  } catch (error) {
+    console.error(`Error searching assets for "${query}":`, error);
+    return [];
+  }
+}

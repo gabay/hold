@@ -1,16 +1,13 @@
 import NextAuth from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import { db } from "@/lib/db";
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(db),
-  providers: [
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET,
-    }),
+// Construct providers array dynamically
+const providers: any[] = [];
+
+if (process.env.ALLOW_DEV_LOGIN === "true") {
+  providers.push(
     Credentials({
       name: "Development Login",
       credentials: {
@@ -35,8 +32,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         
         return user;
       },
-    }),
-  ],
+    })
+  );
+}
+
+// If dynamic OIDC issuer is configured in env, push generic OIDC provider configuration
+if (process.env.AUTH_OIDC_ISSUER && process.env.AUTH_OIDC_CLIENT_ID) {
+  providers.push({
+    id: "oidc",
+    name: process.env.AUTH_OIDC_NAME || "OIDC Login",
+    type: "oidc",
+    issuer: process.env.AUTH_OIDC_ISSUER,
+    clientId: process.env.AUTH_OIDC_CLIENT_ID,
+    clientSecret: process.env.AUTH_OIDC_CLIENT_SECRET,
+    authorization: { params: { scope: "openid email profile" } },
+  });
+}
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  adapter: PrismaAdapter(db),
+  providers,
   callbacks: {
     async jwt({ token, user }) {
       if (user) {

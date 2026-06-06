@@ -1,36 +1,113 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Simple Portfolio Manager
+
+A lightweight, dark-mode portfolio tracking application built with **Next.js 16 (App Router)**, **TypeScript**, **Tailwind CSS v4**, **Prisma**, and **SQLite**.
+
+## Features
+- **Transaction Logging**: Log ETF/Stock buy and sell activities.
+- **Dynamic Valuations**: Tracks portfolio cost basis, current valuations, and returns over time.
+- **Dynamic Charts**: Interactive time-series performance charts (1M, YTD, 1Y, 5Y, MAX) with a Brush timeline slider for zooming and seeking.
+- **Multi-Currency Valuations**: Format calculations dynamically in **USD ($)**, **EUR (€)**, **GBP (£)**, or **ILS (₪)** using cached exchange rates.
+- **CSV Data Portability**: Bulk-import transaction histories or export logs to CSV.
+- **Flexible Auth**: Support for generic OIDC (OpenID Connect) providers, with a fallback credentials login for easy local development.
+
+---
 
 ## Getting Started
 
-First, run the development server:
-
+### 1. Installation
+Clone the repository, navigate to this folder, and install dependencies:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install --legacy-peer-deps
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Configure Environment Variables
+Create a `.env` file in the root of the project:
+```env
+# Absolute path to your SQLite database file
+DATABASE_URL="file:/path/to/your/project/prisma/dev.db"
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+# NextAuth secret key for encrypting sessions
+AUTH_SECRET="your-super-secret-random-key"
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Enable local credentials-based fallback login (true/false)
+ALLOW_DEV_LOGIN="true"
 
-## Learn More
+# (Optional) OpenID Connect OIDC provider configuration
+AUTH_OIDC_ISSUER="https://accounts.google.com"
+AUTH_OIDC_CLIENT_ID="your-client-id"
+AUTH_OIDC_CLIENT_SECRET="your-client-secret"
+AUTH_OIDC_NAME="Google Account" # Name displayed on the login button
+```
 
-To learn more about Next.js, take a look at the following resources:
+### 3. Initialize Database
+Apply the migrations to setup your SQLite database file:
+```bash
+npx prisma migrate dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 4. Run the Development Server
+Start Next.js locally:
+```bash
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) to view the application.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## Configuring OIDC (OpenID Connect)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+This app supports **any generic OpenID Connect provider** (e.g., Keycloak, Auth0, Okta, Google Identity) using OpenID Discovery. 
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+To enable OIDC login, append the following configurations to your `.env` file:
+
+### Example: Sign-in with Google Identity
+1. Create OAuth credentials on the [Google Cloud Console](https://console.cloud.google.com/).
+2. Set the redirect URI to: `http://localhost:3000/api/auth/callback/oidc`.
+3. Add these variables to `.env`:
+   ```env
+   AUTH_OIDC_ISSUER="https://accounts.google.com"
+   AUTH_OIDC_CLIENT_ID="your-google-client-id.apps.googleusercontent.com"
+   AUTH_OIDC_CLIENT_SECRET="your-google-client-secret"
+   AUTH_OIDC_NAME="Google Workspace"
+   ```
+
+### Example: Sign-in with Keycloak
+1. Configure a Client in your Keycloak Realm (ensure Client Protocol is `openid-connect`).
+2. Add these variables to `.env` (pointing to your realm issuer configuration):
+   ```env
+   AUTH_OIDC_ISSUER="https://<your-keycloak-domain>/realms/<realm-name>"
+   AUTH_OIDC_CLIENT_ID="portfolio-manager-client"
+   AUTH_OIDC_CLIENT_SECRET="your-keycloak-client-secret"
+   AUTH_OIDC_NAME="Keycloak Login"
+   ```
+
+*   **OIDC Login**: Only visible if `AUTH_OIDC_ISSUER` and `AUTH_OIDC_CLIENT_ID` are configured in your `.env` file.
+*   **Developer Demo Login**: Only visible if `ALLOW_DEV_LOGIN="true"` is configured in your `.env` file. Set this to `"false"` or omit it in production to completely disable credentials-based mock authentication.
+
+---
+
+## Running in Docker (Minimal Production Image)
+
+This application supports minimal production packaging using multi-stage builds and Next.js standalone output. The final image size is optimized to **~130MB**.
+
+### 1. Build the Docker Image
+Execute the build helper script:
+```bash
+./docker-build.sh
+```
+
+### 2. Run the Container
+Start the container with your `.env` configuration file loaded:
+```bash
+docker run -d \
+  -p 3000:3000 \
+  --name portfolio-manager \
+  --env-file .env \
+  -v /absolute/path/to/local/db-folder:/app/prisma \
+  portfolio-manager:latest
+```
+
+> [!IMPORTANT]
+> **SQLite Database Volume Persistence**:
+> Since SQLite uses a local file, any logged transactions are written inside the container's directory `/app/prisma`. To prevent data loss when the container is stopped or restarted, you **must** mount a host folder to `/app/prisma` containing your `dev.db` database.
+
