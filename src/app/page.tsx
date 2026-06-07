@@ -52,6 +52,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeProviders, setActiveProviders] = useState<Record<string, any> | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   
   // Transaction Form state
   const [showAddForm, setShowAddForm] = useState(false);
@@ -302,7 +303,10 @@ export default function Dashboard() {
       }
 
       const result = await res.json();
-      alert(`Successfully imported ${result.count} transactions!`);
+      setSuccessMessage(`Successfully imported ${result.count} transactions!`);
+      setTimeout(() => {
+        setSuccessMessage(null);
+      }, 3000);
       refreshData();
     } catch (err: any) {
       setError(err.message);
@@ -328,7 +332,10 @@ export default function Dashboard() {
       });
       if (!res.ok) throw new Error("Failed to clear transactions");
       
-      alert("All transactions cleared successfully!");
+      setSuccessMessage("All transactions cleared successfully!");
+      setTimeout(() => {
+        setSuccessMessage(null);
+      }, 3000);
       refreshData();
     } catch (err: any) {
       setError(err.message);
@@ -481,6 +488,12 @@ export default function Dashboard() {
         {error && (
           <div className="rounded-xl border border-red-900 bg-red-950/40 p-4 text-sm text-red-300">
             {error}
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="rounded-xl border border-emerald-900 bg-emerald-950/40 p-4 text-sm text-emerald-300">
+            {successMessage}
           </div>
         )}
 

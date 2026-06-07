@@ -6,7 +6,7 @@ hold.db*
 # dependencies
 /node_modules
 /.pnp
-.pnp.*
+.pnp*
 .yarn/*
 !.yarn/patches
 !.yarn/plugins
