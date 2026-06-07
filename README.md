@@ -208,6 +208,10 @@ docker run -d \
 > **Database Host Directory Permissions**:
 > The container runs as a non-root user (`nextjs`, UID `1001`). Ensure your host directory `/absolute/path/to/local/db-folder` is writeable by UID `1001` or has appropriate read/write permissions.
 
+> [!NOTE]
+> **Automatic Database Initialization**:
+> If the mounted host directory is empty on first startup, the container's entrypoint script will automatically copy a pre-migrated template database (`hold.db`) into it. Subsequent starts will preserve and use your existing data.
+
 ---
 
 ## 🔧 Useful Development Commands
