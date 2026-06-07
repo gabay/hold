@@ -24,7 +24,7 @@ npm install --legacy-peer-deps
 Create a `.env` file in the root of the project:
 ```env
 # Absolute path to your SQLite database file
-DATABASE_URL="file:/path/to/your/project/prisma/dev.db"
+DATABASE_URL="file:/path/to/your/project/prisma/hold.db"
 
 # NextAuth secret key for encrypting sessions
 AUTH_SECRET="your-super-secret-random-key"
@@ -109,5 +109,5 @@ docker run -d \
 
 > [!IMPORTANT]
 > **SQLite Database Volume Persistence**:
-> Since SQLite uses a local file, any logged transactions are written inside the container's directory `/app/prisma`. To prevent data loss when the container is stopped or restarted, you **must** mount a host folder to `/app/prisma` containing your `dev.db` database.
+> Since SQLite uses a local file, any logged transactions are written inside the container's directory `/app/data`. To prevent data loss when the container is stopped or restarted, you **must** mount a host folder to `/app/data` containing your `hold.db` database.
 
