@@ -59,7 +59,7 @@ graph TD
 ## 📁 Project Structure
 
 ```
-portfolio-manager-app/
+/
 ├── prisma/                  # Database schema & migrations
 │   ├── schema.prisma        # Prisma schema definition
 │   └── migrations/          # SQLite database migrations

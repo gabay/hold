@@ -2,10 +2,10 @@
 
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useEffect, useState, useRef } from "react";
-import { 
+import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Brush
 } from "recharts";
-import { 
+import {
   Plus, LogOut, TrendingUp, TrendingDown, DollarSign, Wallet, Percent, Download, Upload, Loader2
 } from "lucide-react";
 
@@ -42,7 +42,7 @@ interface ChartDataPoint {
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
-  
+
   const [portfolio, setPortfolio] = useState<{ id: string; name: string } | null>(null);
   const [summary, setSummary] = useState<PortfolioSummary | null>(null);
   const [history, setHistory] = useState<ChartDataPoint[]>([]);
@@ -53,7 +53,7 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [activeProviders, setActiveProviders] = useState<Record<string, any> | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  
+
   // Transaction Form state
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
@@ -70,7 +70,7 @@ export default function Dashboard() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searching, setSearching] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   // Import CSV state
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
@@ -119,13 +119,13 @@ export default function Dashboard() {
     if (portfolio?.id) {
       setLoading(true);
       setError(null);
-      
+
       const summaryPromise = fetch(`/api/portfolio/${portfolio.id}/summary?currency=${displayCurrency}`, { cache: "no-store" })
         .then((res) => {
           if (!res.ok) throw new Error("Failed to fetch summary");
           return res.json() as Promise<PortfolioSummary>;
         });
-        
+
       const historyPromise = fetch(`/api/portfolio/${portfolio.id}/history?currency=${displayCurrency}&days=${timeRange}`, { cache: "no-store" })
         .then((res) => {
           if (!res.ok) throw new Error("Failed to fetch performance history");
@@ -157,7 +157,7 @@ export default function Dashboard() {
       fetch(`/api/portfolio/${portfolio.id}/summary?currency=${displayCurrency}`, { cache: "no-store" })
         .then((res) => res.json())
         .then((data) => setSummary(data));
-        
+
       fetch(`/api/portfolio/${portfolio.id}/history?currency=${displayCurrency}&days=${timeRange}`, { cache: "no-store" })
         .then((res) => res.json())
         .then((data) => setHistory(data));
@@ -189,7 +189,7 @@ export default function Dashboard() {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("Failed to delete transaction");
-      
+
       refreshData();
     } catch (err: any) {
       setError(err.message);
@@ -198,7 +198,7 @@ export default function Dashboard() {
 
   const handleSymbolChange = (value: string) => {
     setFormSymbol(value);
-    
+
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
@@ -211,7 +211,7 @@ export default function Dashboard() {
 
     setSearching(true);
     setShowSuggestions(true);
-    
+
     searchTimeoutRef.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/finance/search?q=${encodeURIComponent(value)}`);
@@ -230,14 +230,14 @@ export default function Dashboard() {
   const handleAddTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!portfolio?.id) return;
-    
+
     setFormSubmitting(true);
     setError(null);
 
-    const url = editingTransactionId 
+    const url = editingTransactionId
       ? `/api/transactions/${editingTransactionId}`
       : `/api/portfolio/${portfolio.id}/transactions`;
-      
+
     const method = editingTransactionId ? "PUT" : "POST";
 
     try {
@@ -266,7 +266,7 @@ export default function Dashboard() {
       setFormFee("0");
       setEditingTransactionId(null);
       setShowAddForm(false);
-      
+
       // Refresh Data
       refreshData();
     } catch (err: any) {
@@ -283,7 +283,7 @@ export default function Dashboard() {
 
   const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!portfolio?.id || !e.target.files || e.target.files.length === 0) return;
-    
+
     const file = e.target.files[0];
     setImporting(true);
     setError(null);
@@ -331,7 +331,7 @@ export default function Dashboard() {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("Failed to clear transactions");
-      
+
       setSuccessMessage("All transactions cleared successfully!");
       setTimeout(() => {
         setSuccessMessage(null);
@@ -346,10 +346,10 @@ export default function Dashboard() {
 
   // Format currency helpers
   const fmt = (val: number) => {
-    const symbol = 
-      displayCurrency === "USD" ? "$" : 
-      displayCurrency === "EUR" ? "€" : 
-      displayCurrency === "ILS" ? "₪" : 
+    const symbol =
+      displayCurrency === "USD" ? "$" :
+      displayCurrency === "EUR" ? "€" :
+      displayCurrency === "ILS" ? "₪" :
       displayCurrency + " ";
     return `${symbol}${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
@@ -382,7 +382,7 @@ export default function Dashboard() {
               Hold
             </h2>
             <p className="mt-2 text-sm text-slate-400">
-              Simple Portfolio Manager
+              Simple Portfolio Tracker
             </p>
           </div>
           <div className="mt-8 space-y-4">
@@ -442,7 +442,7 @@ export default function Dashboard() {
                 Hold
               </span>
             </div>
-            
+
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-slate-400">Currency:</span>
@@ -484,7 +484,7 @@ export default function Dashboard() {
 
       {/* Main dashboard content */}
       <main className="flex-grow mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
-        
+
         {error && (
           <div className="rounded-xl border border-red-900 bg-red-950/40 p-4 text-sm text-red-300">
             {error}
@@ -574,16 +574,16 @@ export default function Dashboard() {
                 <ResponsiveContainer width="100%" height="90%">
                   <LineChart data={history}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                    <XAxis 
-                      dataKey="date" 
+                    <XAxis
+                      dataKey="date"
                       tickFormatter={(tick) => formatDate(tick)}
-                      tickLine={false} 
-                      axisLine={false} 
-                      stroke="#64748b" 
-                      dy={10} 
+                      tickLine={false}
+                      axisLine={false}
+                      stroke="#64748b"
+                      dy={10}
                     />
                     <YAxis tickLine={false} axisLine={false} stroke="#64748b" dx={-10} />
-                    <Tooltip 
+                    <Tooltip
                       labelFormatter={(label) => formatDate(label)}
                       formatter={(value: any) => fmt(value as number)}
                       contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "12px", color: "#f8fafc" }}
@@ -605,7 +605,7 @@ export default function Dashboard() {
           {/* Quick Actions Panel */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 shadow-md flex flex-col space-y-6">
             <h3 className="text-lg font-bold text-slate-100">Manage Activities</h3>
-            
+
             <div className="flex flex-col gap-3">
               <button
                 type="button"
@@ -679,7 +679,7 @@ export default function Dashboard() {
                 <h3 className="text-lg font-bold text-slate-100">
                   {editingTransactionId ? "Edit Transaction" : "Log Transaction"}
                 </h3>
-                <button 
+                <button
                   onClick={() => setShowAddForm(false)}
                   className="text-slate-400 hover:text-white text-sm font-semibold"
                 >
@@ -824,7 +824,7 @@ export default function Dashboard() {
         {/* Holdings Table */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 shadow-md overflow-hidden">
           <h3 className="text-lg font-bold text-slate-100 mb-6">Current Holdings</h3>
-          
+
           {loading ? (
             <div className="space-y-3">
               {[...Array(3)].map((_, i) => (
@@ -892,7 +892,7 @@ export default function Dashboard() {
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-lg font-bold text-slate-100">Activity History</h3>
           </div>
-          
+
           {loading ? (
             <div className="space-y-3">
               {[...Array(3)].map((_, i) => (
@@ -917,10 +917,10 @@ export default function Dashboard() {
                 <tbody className="divide-y divide-slate-850 text-slate-200 font-medium">
                   {transactions.map((tx) => {
                     const totalCost = tx.quantity * tx.pricePerShare + (tx.type === "BUY" ? tx.fee : -tx.fee);
-                    const sym = 
-                      tx.currency === "USD" ? "$" : 
-                      tx.currency === "EUR" ? "€" : 
-                      tx.currency === "ILS" ? "₪" : 
+                    const sym =
+                      tx.currency === "USD" ? "$" :
+                      tx.currency === "EUR" ? "€" :
+                      tx.currency === "ILS" ? "₪" :
                       tx.currency + " ";
                     return (
                       <tr key={tx.id} className="hover:bg-slate-800/20">

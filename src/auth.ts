@@ -16,11 +16,11 @@ if (process.env.ALLOW_DEV_LOGIN === "true") {
       },
       async authorize(credentials) {
         if (!credentials?.email) return null;
-        
+
         let user = await db.user.findUnique({
           where: { email: credentials.email as string },
         });
-        
+
         if (!user) {
           user = await db.user.create({
             data: {
@@ -29,7 +29,7 @@ if (process.env.ALLOW_DEV_LOGIN === "true") {
             },
           });
         }
-        
+
         return user;
       },
     })
@@ -40,12 +40,12 @@ if (process.env.ALLOW_DEV_LOGIN === "true") {
 if (process.env.AUTH_OIDC_ISSUER && process.env.AUTH_OIDC_CLIENT_ID) {
   providers.push({
     id: "oidc",
-    name: process.env.AUTH_OIDC_NAME || "OIDC Login",
+    name: process.env.AUTH_OIDC_NAME || "OIDC",
     type: "oidc",
     issuer: process.env.AUTH_OIDC_ISSUER,
     clientId: process.env.AUTH_OIDC_CLIENT_ID,
     clientSecret: process.env.AUTH_OIDC_CLIENT_SECRET,
-    authorization: { params: { scope: "openid email profile" } },
+    authorization: { params: { scope: "openid profile" } },
   });
 }
 

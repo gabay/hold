@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Simple Portfolio Manager",
+  title: "Hold - Simple Portfolio Tracker",
   description: "Log transactions and track ETF/Stock valuation and returns",
 };
 
