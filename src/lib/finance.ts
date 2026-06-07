@@ -1,5 +1,5 @@
 import YahooFinance from "yahoo-finance2";
-const yahooFinance = new YahooFinance();
+const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 import { db } from "./db";
 
 export interface AssetInfo {
@@ -84,7 +84,7 @@ export async function getHistoricalAssetPrice(
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     const closestPrice = sortedData[0].close as number;
-    
+
     // Get live info to know currency
     const liveInfo = await getLiveAssetInfo(targetSymbol);
 
@@ -127,7 +127,7 @@ export async function getExchangeRate(
 ): Promise<number> {
   const from = fromCurrency.toUpperCase();
   const to = toCurrency.toUpperCase();
-  
+
   if (from === to) return 1.0;
 
   const dateKey = new Date(date.toISOString().split("T")[0]);
@@ -151,12 +151,12 @@ export async function getExchangeRate(
   try {
     const dateStr = dateKey.toISOString().split("T")[0];
     const url = `https://api.frankfurter.app/${dateStr}?from=${from}&to=${to}`;
-    
+
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Failed to fetch rate: ${response.statusText}`);
     }
-    
+
     const data = (await response.json()) as { rates?: Record<string, number> };
     const rate = data.rates?.[to];
 
@@ -218,7 +218,7 @@ export async function searchAssets(query: string): Promise<Array<{ symbol: strin
   try {
     const res = await yahooFinance.search(query);
     if (!res || !res.quotes) return [];
-    
+
     return res.quotes
       .filter((q: any) => q.symbol && (q.quoteType === "EQUITY" || q.quoteType === "ETF" || q.quoteType === "MUTUALFUND"))
       .map((q: any) => ({

@@ -27,18 +27,18 @@ graph TD
     User([User Browser]) -->|HTTPS| Frontend[Next.js Frontend UI]
     Frontend -->|Interacts| ClientState[React State / Recharts]
     Frontend -->|API Calls| Backend[Next.js API Routes]
-    
+
     subgraph Backend Services
         Backend -->|Auth Session| NextAuth[NextAuth.js]
         Backend -->|Queries| Prisma[Prisma ORM]
         Prisma -->|Read/Write| SQLite[(SQLite Database)]
-        
+
         Backend -->|Fetch Prices| FinanceLib[Finance Helper Lib]
         FinanceLib -->|Cache Lookup| SQLite
         FinanceLib -->|Live Quote / Search| YahooFinance[Yahoo Finance API]
         FinanceLib -->|Rates Lookup| Frankfurter[Frankfurter API]
     end
-    
+
     NextAuth -->|OIDC| ExternalOIDC[OIDC Provider e.g. Google]
 ```
 
@@ -82,7 +82,6 @@ portfolio-manager-app/
 │   └── auth.ts              # NextAuth configuration & handlers
 ├── public/                  # Static assets
 ├── Dockerfile               # Multi-stage production build
-├── docker-build.sh          # Helper script to build Docker image
 └── package.json             # Project dependencies and scripts
 ```
 
@@ -124,7 +123,7 @@ ALLOW_DEV_LOGIN="true"
 ```
 
 ### 3. Initialize the Database
-Apply migrations to setup your SQLite database file. This will automatically create the `prisma/data/` folder and initialize `hold.db`:
+Apply migrations to setup your SQLite database file. This will automatically create the `prisma/` folder and initialize `hold.db`:
 ```bash
 npx prisma migrate dev
 ```
@@ -189,18 +188,18 @@ The project includes a multi-stage Dockerfile that builds a highly optimized pro
 
 ### 1. Build the Image
 ```bash
-./docker-build.sh
+docker build -t hold .
 ```
 
 ### 2. Run the Container (with Persistence)
-To prevent data loss when the container restarts, mount a host directory to `/app/prisma/data` where the SQLite database file (`hold.db`) is stored:
+To prevent data loss when the container restarts, mount a host directory to `/app/prisma` where the SQLite database file (`hold.db`) is stored:
 
 ```bash
 docker run -d \
   -p 3000:3000 \
   --name hold \
   --env-file .env \
-  -v /absolute/path/to/local/db-folder:/app/prisma/data \
+  -v /absolute/path/to/local/db-folder:/app/data \
   hold:latest
 ```
 
