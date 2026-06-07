@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-IMAGE_NAME="portfolio-manager"
+IMAGE_NAME="hold"
 TAG="latest"
 
 echo "Building minimal Docker image for ${IMAGE_NAME}:${TAG}..."

@@ -369,12 +369,13 @@ export default function Dashboard() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center px-4 py-12 sm:px-6 lg:px-8 bg-slate-950 text-slate-100">
         <div className="w-full max-w-md space-y-8 bg-slate-900/60 backdrop-blur-md p-8 rounded-2xl shadow-xl border border-slate-800">
-          <div className="text-center">
-            <h2 className="mt-6 text-3xl font-extrabold tracking-tight bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
-              My Portfolio Manager
+          <div className="text-center flex flex-col items-center">
+            <img src="/icon.png" alt="Hold Logo" className="h-16 w-16 rounded-2xl shadow-lg border border-slate-800" />
+            <h2 className="mt-4 text-3xl font-extrabold tracking-tight bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
+              Hold
             </h2>
             <p className="mt-2 text-sm text-slate-400">
-              Track valuations, returns, and transactions in USD, EUR and more.
+              Simple Portfolio Manager
             </p>
           </div>
           <div className="mt-8 space-y-4">
@@ -428,9 +429,10 @@ export default function Dashboard() {
       <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <img src="/icon.png" alt="Hold Logo" className="h-7 w-7 rounded-lg shadow-md border border-slate-800" />
               <span className="text-xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
-                PortfolioManager
+                Hold
               </span>
             </div>
             

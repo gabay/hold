@@ -63,13 +63,15 @@ export async function getHistoricalAssetPrice(
     const end = new Date(dateKey);
     end.setDate(end.getDate() + 1);
 
-    const historicalData = (await yahooFinance.historical(targetSymbol, {
+    const chartResult = await yahooFinance.chart(targetSymbol, {
       period1: start.toISOString().split("T")[0],
       period2: end.toISOString().split("T")[0],
       interval: "1d",
-    })) as any[];
+    });
 
-    if (!historicalData || historicalData.length === 0) {
+    const historicalData = chartResult?.quotes || [];
+
+    if (historicalData.length === 0) {
       // Fallback to live price if historical is failed or unavailable
       const live = await getLiveAssetInfo(targetSymbol);
       return { price: live.price, currency: live.currency };

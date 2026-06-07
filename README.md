@@ -1,113 +1,222 @@
-# Simple Portfolio Manager
+# 📈 Hold
 
-A lightweight, dark-mode portfolio tracking application built with **Next.js 16 (App Router)**, **TypeScript**, **Tailwind CSS v4**, **Prisma**, and **SQLite**.
+A lightweight, high-performance, portfolio tracking application built with **Next.js 16 (App Router)**, **TypeScript**, **Tailwind CSS v4**, **Prisma**, and **SQLite**.
 
-## Features
-- **Transaction Logging**: Log ETF/Stock buy and sell activities.
-- **Dynamic Valuations**: Tracks portfolio cost basis, current valuations, and returns over time.
-- **Dynamic Charts**: Interactive time-series performance charts (1M, YTD, 1Y, 5Y, MAX) with a Brush timeline slider for zooming and seeking.
-- **Multi-Currency Valuations**: Format calculations dynamically in **USD ($)**, **EUR (€)**, **GBP (£)**, or **ILS (₪)** using cached exchange rates.
-- **CSV Data Portability**: Bulk-import transaction histories or export logs to CSV.
-- **Flexible Auth**: Support for generic OIDC (OpenID Connect) providers, with a fallback credentials login for easy local development.
+Designed for individual investors to track stock/ETF transactions, visualize portfolio performance over time, and analyze returns across multiple currencies with zero external API key requirements.
+
+> NOTE: This project is developed using AI.
 
 ---
 
-## Getting Started
+## 🛠️ Tech Stack
+
+*   **Frontend**: Next.js 16 (App Router, Client Components), Tailwind CSS v4, Recharts (Interactive Charts), Lucide React (Icons)
+*   **Backend**: Next.js Route Handlers (API Routes)
+*   **Database**: SQLite via Prisma ORM
+*   **Authentication**: NextAuth.js (v5 Beta) - Support for OIDC and Mock Developer Login
+*   **External APIs**: Yahoo Finance (Asset prices via `yahoo-finance2`), Frankfurter API (Exchange rates)
+
+---
+
+## 🏗️ Architecture & Data Flow
+
+The following diagram illustrates how the application components interact:
+
+```mermaid
+graph TD
+    User([User Browser]) -->|HTTPS| Frontend[Next.js Frontend UI]
+    Frontend -->|Interacts| ClientState[React State / Recharts]
+    Frontend -->|API Calls| Backend[Next.js API Routes]
+    
+    subgraph Backend Services
+        Backend -->|Auth Session| NextAuth[NextAuth.js]
+        Backend -->|Queries| Prisma[Prisma ORM]
+        Prisma -->|Read/Write| SQLite[(SQLite Database)]
+        
+        Backend -->|Fetch Prices| FinanceLib[Finance Helper Lib]
+        FinanceLib -->|Cache Lookup| SQLite
+        FinanceLib -->|Live Quote / Search| YahooFinance[Yahoo Finance API]
+        FinanceLib -->|Rates Lookup| Frankfurter[Frankfurter API]
+    end
+    
+    NextAuth -->|OIDC| ExternalOIDC[OIDC Provider e.g. Google]
+```
+
+---
+
+## 🌟 Features
+
+*   **Transaction Logging**: Easily log buy and sell activities for any stock, ETF, or mutual fund.
+*   **Real-time & Historical Valuations**: Tracks your cost basis, current market valuations, and total returns.
+*   **Dynamic Performance Charts**: Interactive time-series charts (supporting 30D, YTD, 1Y, 5Y, and MAX views) with a brush timeline slider for custom zooming.
+*   **Multi-Currency Support**: View your portfolio dynamically in **USD ($)**, **EUR (€)**, **GBP (£)**, or **ILS (₪)**. Currency conversions use cached historical rates for accuracy on the transaction date.
+*   **Smart Caching**: Minimizes external API requests by caching historical asset prices and exchange rates in the local SQLite database.
+*   **CSV Data Portability**: Import historical transactions in bulk or export your current transaction log to CSV.
+*   **Hybrid Authentication**: Support for generic OpenID Connect (OIDC) providers alongside a toggleable mock developer login for local testing.
+
+---
+
+## 📁 Project Structure
+
+```
+portfolio-manager-app/
+├── prisma/                  # Database schema & migrations
+│   ├── schema.prisma        # Prisma schema definition
+│   └── migrations/          # SQLite database migrations
+├── src/
+│   ├── app/                 # Next.js App Router
+│   │   ├── api/             # Backend API Route Handlers
+│   │   │   ├── auth/        # NextAuth API configuration
+│   │   │   ├── finance/     # Live stock search endpoints
+│   │   │   ├── portfolio/   # Portfolio summary, history, import/export
+│   │   │   └── transactions/# Individual transaction operations
+│   │   ├── globals.css      # Global Styles (Tailwind v4 imports)
+│   │   ├── layout.tsx       # Root layout & providers
+│   │   └── page.tsx         # Dashboard main page (UI & client logic)
+│   ├── components/          # Shared React components
+│   │   └── Providers.tsx    # NextAuth Session Provider wrapper
+│   ├── lib/                 # Business logic & utilities
+│   │   ├── db.ts            # Prisma client instance
+│   │   ├── finance.ts       # Yahoo Finance & Frankfurter API clients
+│   │   └── portfolio.ts     # Portfolio aggregation & performance math
+│   └── auth.ts              # NextAuth configuration & handlers
+├── public/                  # Static assets
+├── Dockerfile               # Multi-stage production build
+├── docker-build.sh          # Helper script to build Docker image
+└── package.json             # Project dependencies and scripts
+```
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+*   **Node.js**: `v20.x` or higher
+*   **Package Manager**: `pnpm` (recommended) or `npm`
 
 ### 1. Installation
-Clone the repository, navigate to this folder, and install dependencies:
+Clone the repository and navigate to this directory:
 ```bash
+# Using pnpm (recommended)
+pnpm install
+
+# Or using npm
 npm install --legacy-peer-deps
 ```
 
 ### 2. Configure Environment Variables
 Create a `.env` file in the root of the project:
 ```env
-# Absolute path to your SQLite database file
-DATABASE_URL="file:/path/to/your/project/prisma/hold.db"
+# Connection string for SQLite database (resolved relative to prisma/ directory)
+DATABASE_URL="file:./data/hold.db"
 
-# NextAuth secret key for encrypting sessions
+# NextAuth secret key for encrypting session cookies (Generate with: openssl rand -base64 32)
 AUTH_SECRET="your-super-secret-random-key"
 
-# Enable local credentials-based fallback login (true/false)
+# Enable local credentials-based fallback login (set to "false" in production)
 ALLOW_DEV_LOGIN="true"
 
 # (Optional) OpenID Connect OIDC provider configuration
-AUTH_OIDC_ISSUER="https://accounts.google.com"
-AUTH_OIDC_CLIENT_ID="your-client-id"
-AUTH_OIDC_CLIENT_SECRET="your-client-secret"
-AUTH_OIDC_NAME="Google Account" # Name displayed on the login button
+# AUTH_OIDC_ISSUER="https://accounts.google.com"
+# AUTH_OIDC_CLIENT_ID="your-client-id"
+# AUTH_OIDC_CLIENT_SECRET="your-client-secret"
+# AUTH_OIDC_NAME="Google Account"
 ```
 
-### 3. Initialize Database
-Apply the migrations to setup your SQLite database file:
+### 3. Initialize the Database
+Apply migrations to setup your SQLite database file. This will automatically create the `prisma/data/` folder and initialize `hold.db`:
 ```bash
 npx prisma migrate dev
 ```
 
 ### 4. Run the Development Server
-Start Next.js locally:
+Start the Next.js development server:
 ```bash
+# Using pnpm
+pnpm dev
+
+# Using npm
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) to view the application.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## Configuring OIDC (OpenID Connect)
+## 🗃️ CSV Import Format
 
-This app supports **any generic OpenID Connect provider** (e.g., Keycloak, Auth0, Okta, Google Identity) using OpenID Discovery. 
+You can import transaction history in bulk via a CSV file. The CSV file must contain a header row.
 
-To enable OIDC login, append the following configurations to your `.env` file:
+| Column | Required | Description | Example Values |
+| :--- | :---: | :--- | :--- |
+| `symbol` | **Yes** | Stock ticker symbol compatible with Yahoo Finance | `AAPL`, `VWCE.DE`, `MSFT` |
+| `type` | **Yes** | Transaction type (case-insensitive) | `BUY`, `SELL` |
+| `quantity` | **Yes** | Number of shares transacted (float) | `10`, `2.5` |
+| `pricePerShare` | **Yes** | Price per share in the transaction currency (float). *Alias: `price`* | `175.50`, `94.20` |
+| `currency` | No | Currency of the transaction. If omitted, fetched automatically via ticker symbol | `USD`, `EUR`, `GBP` |
+| `fee` | No | Transaction fee in the transaction currency. Defaults to `0` | `1.50`, `0` |
+| `transactionDate`| No | Date of the transaction. Defaults to today. *Alias: `date`* | `2023-10-25`, `2024-01-12` |
 
-### Example: Sign-in with Google Identity
-1. Create OAuth credentials on the [Google Cloud Console](https://console.cloud.google.com/).
-2. Set the redirect URI to: `http://localhost:3000/api/auth/callback/oidc`.
-3. Add these variables to `.env`:
+### Example CSV Content
+```csv
+symbol,type,quantity,pricePerShare,currency,fee,transactionDate
+AAPL,BUY,10,175.50,USD,1.50,2023-10-25
+VWCE.DE,BUY,5,102.30,EUR,2.00,2023-11-01
+TSLA,SELL,2,220.00,USD,1.00,2023-11-15
+```
+
+---
+
+## 🔐 Configuring OIDC (OpenID Connect)
+
+The application supports standard OIDC providers (e.g., Google Identity, Keycloak, Auth0, Okta).
+
+### Example: Google Identity Setup
+1. Create OAuth 2.0 Credentials on the [Google Cloud Console](https://console.cloud.google.com/).
+2. Set the Authorized Redirect URI to: `http://localhost:3000/api/auth/callback/oidc`.
+3. Configure these variables in `.env`:
    ```env
    AUTH_OIDC_ISSUER="https://accounts.google.com"
    AUTH_OIDC_CLIENT_ID="your-google-client-id.apps.googleusercontent.com"
    AUTH_OIDC_CLIENT_SECRET="your-google-client-secret"
-   AUTH_OIDC_NAME="Google Workspace"
+   AUTH_OIDC_NAME="Google Account"
    ```
-
-### Example: Sign-in with Keycloak
-1. Configure a Client in your Keycloak Realm (ensure Client Protocol is `openid-connect`).
-2. Add these variables to `.env` (pointing to your realm issuer configuration):
-   ```env
-   AUTH_OIDC_ISSUER="https://<your-keycloak-domain>/realms/<realm-name>"
-   AUTH_OIDC_CLIENT_ID="portfolio-manager-client"
-   AUTH_OIDC_CLIENT_SECRET="your-keycloak-client-secret"
-   AUTH_OIDC_NAME="Keycloak Login"
-   ```
-
-*   **OIDC Login**: Only visible if `AUTH_OIDC_ISSUER` and `AUTH_OIDC_CLIENT_ID` are configured in your `.env` file.
-*   **Developer Demo Login**: Only visible if `ALLOW_DEV_LOGIN="true"` is configured in your `.env` file. Set this to `"false"` or omit it in production to completely disable credentials-based mock authentication.
 
 ---
 
-## Running in Docker (Minimal Production Image)
+## 🐳 Running in Docker (Production)
 
-This application supports minimal production packaging using multi-stage builds and Next.js standalone output. The final image size is optimized to **~130MB**.
+The project includes a multi-stage Dockerfile that builds a highly optimized production image (~130MB).
 
-### 1. Build the Docker Image
-Execute the build helper script:
+### 1. Build the Image
 ```bash
 ./docker-build.sh
 ```
 
-### 2. Run the Container
-Start the container with your `.env` configuration file loaded:
+### 2. Run the Container (with Persistence)
+To prevent data loss when the container restarts, mount a host directory to `/app/prisma/data` where the SQLite database file (`hold.db`) is stored:
+
 ```bash
 docker run -d \
   -p 3000:3000 \
-  --name portfolio-manager \
+  --name hold \
   --env-file .env \
-  -v /absolute/path/to/local/db-folder:/app/prisma \
-  portfolio-manager:latest
+  -v /absolute/path/to/local/db-folder:/app/prisma/data \
+  hold:latest
 ```
 
 > [!IMPORTANT]
-> **SQLite Database Volume Persistence**:
-> Since SQLite uses a local file, any logged transactions are written inside the container's directory `/app/data`. To prevent data loss when the container is stopped or restarted, you **must** mount a host folder to `/app/data` containing your `hold.db` database.
+> **Database Host Directory Permissions**:
+> The container runs as a non-root user (`nextjs`, UID `1001`). Ensure your host directory `/absolute/path/to/local/db-folder` is writeable by UID `1001` or has appropriate read/write permissions.
 
+---
+
+## 🔧 Useful Development Commands
+
+*   **Run Linter**: `npm run lint` or `pnpm lint`
+*   **Open Database Studio**: `npx prisma studio` (Visual explorer for your SQLite database)
+*   **Generate Prisma Client**: `npx prisma generate` (Run this after making changes to `schema.prisma`)
+*   **Create a Database Migration**: `npx prisma migrate dev --name <migration_name>`
+
+---
+
+*Note: This project is developed with AI assistance.*
