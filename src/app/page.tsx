@@ -6,7 +6,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Brush
 } from "recharts";
 import {
-  Plus, LogOut, TrendingUp, TrendingDown, DollarSign, Wallet, Percent, Download, Upload, Loader2
+  Plus, LogOut, TrendingUp, TrendingDown, DollarSign, Wallet, Percent, Download, Upload, Loader2, Eye, EyeOff
 } from "lucide-react";
 
 interface Holding {
@@ -53,6 +53,21 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [activeProviders, setActiveProviders] = useState<Record<string, any> | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [privacyMode, setPrivacyMode] = useState(false);
+  const privacyModeText = "••••••"
+
+  useEffect(() => {
+    const saved = localStorage.getItem("portfolio_privacyMode");
+    if (saved) {
+      setPrivacyMode(saved === "true");
+    }
+  }, []);
+
+  const togglePrivacy = () => {
+    const newMode = !privacyMode;
+    setPrivacyMode(newMode);
+    localStorage.setItem("portfolio_privacyMode", String(newMode));
+  };
 
   // Transaction Form state
   const [showAddForm, setShowAddForm] = useState(false);
@@ -363,6 +378,11 @@ export default function Dashboard() {
     return `${day}-${month}-${year}`;
   };
 
+  const chartData = history.map(d => ({
+    ...d,
+    percentReturn: d.invested > 0 ? ((d.valuation - d.invested) / d.invested) * 100 : 0
+  }));
+
   if (status === "loading") {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-slate-950">
@@ -465,6 +485,13 @@ export default function Dashboard() {
               <div className="h-6 w-px bg-slate-800"></div>
 
               <div className="flex items-center gap-3">
+                <button
+                  onClick={togglePrivacy}
+                  className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-all"
+                  title={privacyMode ? "Show Balances" : "Hide Balances"}
+                >
+                  {privacyMode ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
                 <div className="text-right hidden sm:block">
                   <p className="text-sm font-semibold text-slate-200">{session.user?.name}</p>
                   <p className="text-xs text-slate-400">{session.user?.email}</p>
@@ -511,7 +538,7 @@ export default function Dashboard() {
               <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 shadow-md flex items-center justify-between">
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-slate-400">Current Valuation</p>
-                  <p className="text-3xl font-bold tracking-tight text-white">{fmt(summary.totalValue)}</p>
+                  <p className="text-3xl font-bold tracking-tight text-white">{privacyMode ? privacyModeText : fmt(summary.totalValue)}</p>
                 </div>
                 <div className="rounded-xl bg-sky-950/40 text-sky-400 border border-sky-900/30 p-3">
                   <Wallet className="h-6 w-6" />
@@ -522,7 +549,7 @@ export default function Dashboard() {
               <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 shadow-md flex items-center justify-between">
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-slate-400">Invested Capital (Cost)</p>
-                  <p className="text-3xl font-bold tracking-tight text-white">{fmt(summary.totalCost)}</p>
+                  <p className="text-3xl font-bold tracking-tight text-white">{privacyMode ? privacyModeText : fmt(summary.totalCost)}</p>
                 </div>
                 <div className="rounded-xl bg-indigo-950/40 text-indigo-400 border border-indigo-900/30 p-3">
                   <DollarSign className="h-6 w-6" />
@@ -535,7 +562,7 @@ export default function Dashboard() {
                   <p className="text-sm font-medium text-slate-400">Total Profit / Loss</p>
                   <div className="flex items-baseline gap-2">
                     <p className={`text-3xl font-bold tracking-tight ${summary.totalProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {fmt(summary.totalProfit)}
+                      {privacyMode ? privacyModeText : fmt(summary.totalProfit)}
                     </p>
                     <span className={`text-sm font-semibold flex items-center gap-0.5 ${summary.totalProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                       {summary.totalProfit >= 0 ? <TrendingUp className="h-4.5 w-4.5" /> : <TrendingDown className="h-4.5 w-4.5" />}
@@ -572,7 +599,7 @@ export default function Dashboard() {
                 </div>
               ) : history.length > 0 ? (
                 <ResponsiveContainer width="100%" height="90%">
-                  <LineChart data={history}>
+                  <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                     <XAxis
                       dataKey="date"
@@ -582,15 +609,30 @@ export default function Dashboard() {
                       stroke="#64748b"
                       dy={10}
                     />
-                    <YAxis tickLine={false} axisLine={false} stroke="#64748b" dx={-10} />
+                    <YAxis 
+                      tickFormatter={(val) => privacyMode ? `${val}%` : fmt(val)}
+                      tickLine={false} 
+                      axisLine={false} 
+                      stroke="#64748b" 
+                      dx={-10} 
+                    />
                     <Tooltip
                       labelFormatter={(label) => formatDate(label)}
-                      formatter={(value: any) => fmt(value as number)}
+                      formatter={(value: any, name: any) => {
+                        if (privacyMode && name === "Return") return `${Number(value).toFixed(2)}%`;
+                        return privacyMode ? privacyModeText : fmt(value as number);
+                      }}
                       contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "12px", color: "#f8fafc" }}
                     />
                     <Legend />
-                    <Line type="monotone" dataKey="valuation" name="Total Value" stroke="#0ea5e9" strokeWidth={3} dot={false} activeDot={{ r: 8 }} />
-                    <Line type="monotone" dataKey="invested" name="Invested Capital" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                    {privacyMode ? (
+                      <Line type="monotone" dataKey="percentReturn" name="Return" stroke="#10b981" strokeWidth={3} dot={false} activeDot={{ r: 8 }} />
+                    ) : (
+                      <>
+                        <Line type="monotone" dataKey="valuation" name="Total Value" stroke="#0ea5e9" strokeWidth={3} dot={false} activeDot={{ r: 8 }} />
+                        <Line type="monotone" dataKey="invested" name="Invested Capital" stroke="#6366f1" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                      </>
+                    )}
                     <Brush dataKey="date" tickFormatter={(tick) => formatDate(tick)} height={30} stroke="#1e293b" fill="#0f172a" />
                   </LineChart>
                 </ResponsiveContainer>
@@ -854,21 +896,19 @@ export default function Dashboard() {
                           <span className="text-xs text-slate-500 uppercase">{h.currency}</span>
                         </div>
                       </td>
-                      <td className="py-4 px-4">{h.quantity}</td>
+                      <td className="py-4 px-4">{privacyMode ? privacyModeText : h.quantity}</td>
                       <td className="py-4 px-4">
-                        {h.currency === "USD" ? "$" : h.currency === "EUR" ? "€" : h.currency + " "}
-                        {h.avgBuyPrice.toFixed(2)}
+                        {privacyMode ? privacyModeText : `${h.currency === "USD" ? "$" : h.currency === "EUR" ? "€" : h.currency + " "}${h.avgBuyPrice.toFixed(2)}`}
                       </td>
                       <td className="py-4 px-4">
-                        {h.currency === "USD" ? "$" : h.currency === "EUR" ? "€" : h.currency + " "}
-                        {h.currentPrice.toFixed(2)}
+                        {privacyMode ? privacyModeText : `${h.currency === "USD" ? "$" : h.currency === "EUR" ? "€" : h.currency + " "}${h.currentPrice.toFixed(2)}`}
                       </td>
-                      <td className="py-4 px-4">{fmt(h.costInDisplayCurrency)}</td>
-                      <td className="py-4 px-4">{fmt(h.valueInDisplayCurrency)}</td>
+                      <td className="py-4 px-4">{privacyMode ? privacyModeText : fmt(h.costInDisplayCurrency)}</td>
+                      <td className="py-4 px-4">{privacyMode ? privacyModeText : fmt(h.valueInDisplayCurrency)}</td>
                       <td className={`py-4 pl-4 text-right ${h.profitInDisplayCurrency >= 0 ? 'text-emerald-450' : 'text-rose-455'}`}>
                         <div className="flex flex-col items-end">
                           <span className={h.profitInDisplayCurrency >= 0 ? 'text-emerald-400' : 'text-rose-450'}>
-                            {h.profitInDisplayCurrency >= 0 ? "+" : ""}{fmt(h.profitInDisplayCurrency)}
+                            {privacyMode ? privacyModeText : `${h.profitInDisplayCurrency >= 0 ? "+" : ""}${fmt(h.profitInDisplayCurrency)}`}
                           </span>
                           <span className={`text-xs font-bold ${h.profitInDisplayCurrency >= 0 ? 'text-emerald-400' : 'text-rose-450'}`}>
                             {h.profitInDisplayCurrency >= 0 ? "+" : ""}{h.profitPercentage.toFixed(2)}%
@@ -933,10 +973,10 @@ export default function Dashboard() {
                             {tx.type}
                           </span>
                         </td>
-                        <td className="py-4 px-4">{tx.quantity}</td>
-                        <td className="py-4 px-4">{sym}{tx.pricePerShare.toFixed(2)}</td>
-                        <td className="py-4 px-4">{sym}{tx.fee.toFixed(2)}</td>
-                        <td className="py-4 px-4 font-semibold text-white">{sym}{totalCost.toFixed(2)}</td>
+                        <td className="py-4 px-4">{privacyMode ? privacyModeText : tx.quantity}</td>
+                        <td className="py-4 px-4">{privacyMode ? privacyModeText : `${sym}${tx.pricePerShare.toFixed(2)}`}</td>
+                        <td className="py-4 px-4">{privacyMode ? privacyModeText : `${sym}${tx.fee.toFixed(2)}`}</td>
+                        <td className="py-4 px-4 font-semibold text-white">{privacyMode ? privacyModeText : `${sym}${totalCost.toFixed(2)}`}</td>
                         <td className="py-4 pl-4 text-right">
                           <div className="flex justify-end gap-2">
                             <button

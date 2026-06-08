@@ -23,7 +23,7 @@ export async function GET(
     const headers = "symbol,type,quantity,pricePerShare,currency,fee,transactionDate\n";
     const rows = transactions
       .map(
-        (tx) =>
+        (tx: any) =>
           `"${tx.symbol}","${tx.type}",${tx.quantity},${tx.pricePerShare},"${tx.currency}",${tx.fee},"${tx.transactionDate.toISOString()}"`
       )
       .join("\n");
