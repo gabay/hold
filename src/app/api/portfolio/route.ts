@@ -3,58 +3,58 @@ import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session || !session.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+    const session = await auth();
+    if (!session || !session.user?.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const userId = session.user.id;
-  
-  let portfolios = await db.portfolio.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-  });
+    const userId = session.user.id;
 
-  if (portfolios.length === 0) {
-    const defaultPortfolio = await db.portfolio.create({
-      data: {
-        name: "My Portfolio",
-        baseCurrency: "USD",
-        userId,
-      },
+    let portfolios = await db.portfolio.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
     });
-    portfolios = [defaultPortfolio];
-  }
 
-  return NextResponse.json(portfolios);
+    if (portfolios.length === 0) {
+        const defaultPortfolio = await db.portfolio.create({
+            data: {
+                name: "My Portfolio",
+                baseCurrency: "USD",
+                userId,
+            },
+        });
+        portfolios = [defaultPortfolio];
+    }
+
+    return NextResponse.json(portfolios);
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session || !session.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const userId = session.user.id;
-  
-  try {
-    const body = await req.json();
-    const { name, baseCurrency } = body;
-
-    if (!name) {
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    const session = await auth();
+    if (!session || !session.user?.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const portfolio = await db.portfolio.create({
-      data: {
-        name,
-        baseCurrency: baseCurrency || "USD",
-        userId,
-      },
-    });
+    const userId = session.user.id;
 
-    return NextResponse.json(portfolio, { status: 201 });
-  } catch (error) {
-    return NextResponse.json({ error: "Invalid request payload" }, { status: 400 });
-  }
+    try {
+        const body = await req.json();
+        const { name, baseCurrency } = body;
+
+        if (!name) {
+            return NextResponse.json({ error: "Name is required" }, { status: 400 });
+        }
+
+        const portfolio = await db.portfolio.create({
+            data: {
+                name,
+                baseCurrency: baseCurrency || "USD",
+                userId,
+            },
+        });
+
+        return NextResponse.json(portfolio, { status: 201 });
+    } catch (error) {
+        return NextResponse.json({ error: "Invalid request payload" }, { status: 400 });
+    }
 }
