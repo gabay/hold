@@ -17,11 +17,11 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         });
 
         // Generate CSV contents
-        const headers = "symbol,type,quantity,pricePerShare,currency,fee,transactionDate\n";
+        const headers = "symbol,type,quantity,pricePerShare,currency,transactionDate\n";
         const rows = transactions
             .map(
                 (tx: any) =>
-                    `"${tx.symbol}","${tx.type}",${tx.quantity},${tx.pricePerShare},"${tx.currency}",${tx.fee},"${tx.transactionDate.toISOString()}"`,
+                    `"${tx.symbol}","${tx.type}",${tx.quantity},${tx.pricePerShare},"${tx.currency || ""}","${tx.transactionDate.toISOString()}"`,
             )
             .join("\n");
 

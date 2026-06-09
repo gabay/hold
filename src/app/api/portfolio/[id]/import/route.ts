@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { getLiveAssetInfo } from "@/lib/finance";
+import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -39,7 +39,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                 ? headers.indexOf("pricepershare")
                 : headers.indexOf("price");
         const currencyIdx = headers.indexOf("currency");
-        const feeIdx = headers.indexOf("fee");
         const dateIdx =
             headers.indexOf("transactiondate") !== -1
                 ? headers.indexOf("transactiondate")
@@ -65,9 +64,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             const type = row[typeIdx].toUpperCase();
             const quantity = parseFloat(row[quantityIdx]);
             const pricePerShare = parseFloat(row[priceIdx]);
-            let currency =
-                currencyIdx !== -1 && row[currencyIdx] ? row[currencyIdx].toUpperCase() : null;
-            const fee = feeIdx !== -1 && row[feeIdx] ? parseFloat(row[feeIdx]) : 0;
+            const currency =
+                currencyIdx !== -1 && row[currencyIdx]
+                    ? row[currencyIdx].toUpperCase().trim()
+                    : null;
             const transactionDate =
                 dateIdx !== -1 && row[dateIdx] ? new Date(row[dateIdx]) : new Date();
 
@@ -78,17 +78,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                 );
             }
 
-            // If currency is not provided in CSV, fetch it live
-            if (!currency) {
-                try {
-                    const info = await getLiveAssetInfo(symbol);
-                    currency = info.currency;
-                } catch (e) {
-                    return NextResponse.json(
-                        { error: `Could not resolve ticker symbol "${symbol}" at row ${i + 1}` },
-                        { status: 400 },
-                    );
-                }
+            if (currency && !SUPPORTED_CURRENCIES[currency]) {
+                return NextResponse.json(
+                    { error: `Unsupported currency "${currency}" at row ${i + 1}` },
+                    { status: 400 },
+                );
             }
 
             newTransactions.push({
@@ -97,8 +91,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                 type,
                 quantity,
                 pricePerShare,
-                currency,
-                fee,
+                currency: currency || null,
                 transactionDate,
             });
         }

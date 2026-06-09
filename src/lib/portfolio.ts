@@ -52,15 +52,35 @@ export async function getPortfolioSummary(
 
     const transactions = portfolio.transactions;
     const holdingsMap = new Map<string, { quantity: number; totalCost: number }>();
+    const symbolToCurrencyMap = new Map<string, string>();
 
     // Process transactions to find net holdings and cost basis
     for (const tx of transactions) {
         const symbol = tx.symbol.toUpperCase();
+
+        // Get ticker currency (cached)
+        let tickerCurrency = symbolToCurrencyMap.get(symbol);
+        if (!tickerCurrency) {
+            const assetInfo = await getLiveAssetInfo(symbol);
+            tickerCurrency = assetInfo.currency;
+            symbolToCurrencyMap.set(symbol, tickerCurrency);
+        }
+
         const current = holdingsMap.get(symbol) || { quantity: 0, totalCost: 0 };
+
+        // Determine transaction currency. If null/empty, use ticker currency.
+        const txCurrency = tx.currency || tickerCurrency;
+
+        // Convert price to ticker currency at transaction date
+        let priceInTickerCurrency = tx.pricePerShare;
+        if (txCurrency !== tickerCurrency) {
+            const rate = await getExchangeRate(txCurrency, tickerCurrency, tx.transactionDate);
+            priceInTickerCurrency = tx.pricePerShare * rate;
+        }
 
         if (tx.type === "BUY") {
             const addedQuantity = tx.quantity;
-            const addedCost = tx.quantity * tx.pricePerShare + tx.fee;
+            const addedCost = tx.quantity * priceInTickerCurrency;
             holdingsMap.set(symbol, {
                 quantity: current.quantity + addedQuantity,
                 totalCost: current.totalCost + addedCost,
@@ -176,6 +196,21 @@ export async function getPortfolioHistory(
         dates.push(new Date(d.toISOString().split("T")[0]));
     }
 
+    // Pre-fetch ticker currencies to avoid rate limits/slowdowns in nested loops
+    const uniqueSymbols = Array.from(
+        new Set(portfolio.transactions.map((t) => t.symbol.toUpperCase())),
+    );
+    const symbolToCurrencyMap = new Map<string, string>();
+    for (const symbol of uniqueSymbols) {
+        try {
+            const assetInfo = await getLiveAssetInfo(symbol);
+            symbolToCurrencyMap.set(symbol, assetInfo.currency);
+        } catch (e) {
+            console.error(`Failed to get currency for ${symbol}`, e);
+            symbolToCurrencyMap.set(symbol, "USD"); // Fallback
+        }
+    }
+
     // Calculate value for each date
     for (const date of dates) {
         const dateStr = date.toISOString().split("T")[0];
@@ -189,12 +224,21 @@ export async function getPortfolioHistory(
 
         for (const tx of txsBeforeDate) {
             const symbol = tx.symbol.toUpperCase();
+            const tickerCurrency = symbolToCurrencyMap.get(symbol) || "USD";
             const current = holdingsMap.get(symbol) || { quantity: 0, totalCost: 0 };
+
+            const txCurrency = tx.currency || tickerCurrency;
+
+            let priceInTickerCurrency = tx.pricePerShare;
+            if (txCurrency !== tickerCurrency) {
+                const rate = await getExchangeRate(txCurrency, tickerCurrency, tx.transactionDate);
+                priceInTickerCurrency = tx.pricePerShare * rate;
+            }
 
             if (tx.type === "BUY") {
                 holdingsMap.set(symbol, {
                     quantity: current.quantity + tx.quantity,
-                    totalCost: current.totalCost + (tx.quantity * tx.pricePerShare + tx.fee),
+                    totalCost: current.totalCost + tx.quantity * priceInTickerCurrency,
                 });
             } else if (tx.type === "SELL") {
                 const ratio =

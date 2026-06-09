@@ -162,16 +162,15 @@ You can import transaction history in bulk via a CSV file. The CSV file must con
 | `quantity`        | **Yes**  | Number of shares transacted (float)                                              | `10`, `2.5`                |
 | `pricePerShare`   | **Yes**  | Price per share in the transaction currency (float). _Alias: `price`_            | `175.50`, `94.20`          |
 | `currency`        |    No    | Currency of the transaction. If omitted, fetched automatically via ticker symbol | `USD`, `EUR`, `GBP`        |
-| `fee`             |    No    | Transaction fee in the transaction currency. Defaults to `0`                     | `1.50`, `0`                |
 | `transactionDate` |    No    | Date of the transaction. Defaults to today. _Alias: `date`_                      | `2023-10-25`, `2024-01-12` |
 
 ### Example CSV Content
 
 ```csv
-symbol,type,quantity,pricePerShare,currency,fee,transactionDate
-AAPL,BUY,10,175.50,USD,1.50,2023-10-25
-VWCE.DE,BUY,5,102.30,EUR,2.00,2023-11-01
-TSLA,SELL,2,220.00,USD,1.00,2023-11-15
+symbol,type,quantity,pricePerShare,currency,transactionDate
+AAPL,BUY,10,175.50,USD,2023-10-25
+VWCE.DE,BUY,5,102.30,EUR,2023-11-01
+TSLA,SELL,2,220.00,USD,2023-11-15
 ```
 
 ---

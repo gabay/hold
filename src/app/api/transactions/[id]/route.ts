@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { getLiveAssetInfo } from "@/lib/finance";
+import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -13,7 +14,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
 
     try {
         const body = await req.json();
-        const { symbol, type, quantity, pricePerShare, fee, transactionDate } = body;
+        const { symbol, type, quantity, pricePerShare, currency, transactionDate } = body;
 
         if (!symbol || !type || !quantity || !pricePerShare) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -22,6 +23,14 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         if (type !== "BUY" && type !== "SELL") {
             return NextResponse.json(
                 { error: "Invalid type. Must be BUY or SELL." },
+                { status: 400 },
+            );
+        }
+
+        const normalizedCurrency = currency ? currency.toUpperCase().trim() : null;
+        if (normalizedCurrency && !SUPPORTED_CURRENCIES[normalizedCurrency]) {
+            return NextResponse.json(
+                { error: `Unsupported currency "${currency}"` },
                 { status: 400 },
             );
         }
@@ -46,8 +55,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
                 type,
                 quantity: parseFloat(quantity),
                 pricePerShare: parseFloat(pricePerShare),
-                currency: assetInfo.currency,
-                fee: parseFloat(fee || 0),
+                currency: normalizedCurrency,
                 transactionDate: new Date(transactionDate),
             },
         });

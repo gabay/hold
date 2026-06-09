@@ -2,6 +2,8 @@
 
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useEffect, useState, useRef } from "react";
+import CurrencySearchBox from "@/components/CurrencySearchBox";
+import TransactionModal from "@/components/TransactionModal";
 import {
     LineChart,
     Line,
@@ -26,6 +28,7 @@ import {
     Loader2,
     Eye,
     EyeOff,
+    Trash,
 } from "lucide-react";
 
 interface Holding {
@@ -80,6 +83,10 @@ export default function Dashboard() {
         if (saved) {
             setPrivacyMode(saved === "true");
         }
+        const savedCurrency = localStorage.getItem("portfolio_displayCurrency");
+        if (savedCurrency) {
+            setDisplayCurrency(savedCurrency);
+        }
     }, []);
 
     const togglePrivacy = () => {
@@ -90,20 +97,7 @@ export default function Dashboard() {
 
     // Transaction Form state
     const [showAddForm, setShowAddForm] = useState(false);
-    const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
-    const [formSymbol, setFormSymbol] = useState("");
-    const [formType, setFormType] = useState<"BUY" | "SELL">("BUY");
-    const [formQuantity, setFormQuantity] = useState("");
-    const [formPrice, setFormPrice] = useState("");
-    const [formFee, setFormFee] = useState("0");
-    const [formDate, setFormDate] = useState(new Date().toISOString().split("T")[0]);
-    const [formSubmitting, setFormSubmitting] = useState(false);
-
-    // Autocomplete states
-    const [suggestions, setSuggestions] = useState<any[]>([]);
-    const [showSuggestions, setShowSuggestions] = useState(false);
-    const [searching, setSearching] = useState(false);
-    const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const [editingTransaction, setEditingTransaction] = useState<any | null>(null);
 
     // Import CSV state
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -213,13 +207,7 @@ export default function Dashboard() {
     };
 
     const startEditTransaction = (tx: any) => {
-        setEditingTransactionId(tx.id);
-        setFormSymbol(tx.symbol);
-        setFormType(tx.type);
-        setFormQuantity(tx.quantity.toString());
-        setFormPrice(tx.pricePerShare.toString());
-        setFormFee(tx.fee.toString());
-        setFormDate(new Date(tx.transactionDate).toISOString().split("T")[0]);
+        setEditingTransaction(tx);
         setShowAddForm(true);
     };
 
@@ -237,89 +225,6 @@ export default function Dashboard() {
             refreshData();
         } catch (err: any) {
             setError(err.message);
-        }
-    };
-
-    const handleSymbolChange = (value: string) => {
-        setFormSymbol(value);
-
-        if (searchTimeoutRef.current) {
-            clearTimeout(searchTimeoutRef.current);
-        }
-
-        if (value.trim().length < 2) {
-            setSuggestions([]);
-            setShowSuggestions(false);
-            return;
-        }
-
-        setSearching(true);
-        setShowSuggestions(true);
-
-        searchTimeoutRef.current = setTimeout(async () => {
-            try {
-                const res = await fetch(`/api/finance/search?q=${encodeURIComponent(value)}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    setSuggestions(data);
-                }
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setSearching(false);
-            }
-        }, 400);
-    };
-
-    const handleAddTransaction = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!portfolio?.id) return;
-
-        setFormSubmitting(true);
-        setError(null);
-
-        const url = editingTransactionId
-            ? `/api/transactions/${editingTransactionId}`
-            : `/api/portfolio/${portfolio.id}/transactions`;
-
-        const method = editingTransactionId ? "PUT" : "POST";
-
-        try {
-            const res = await fetch(url, {
-                method,
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    symbol: formSymbol,
-                    type: formType,
-                    quantity: parseFloat(formQuantity),
-                    pricePerShare: parseFloat(formPrice),
-                    fee: parseFloat(formFee),
-                    transactionDate: new Date(formDate).toISOString(),
-                }),
-            });
-
-            if (!res.ok) {
-                const errData = await res.json();
-                throw new Error(
-                    errData.error ||
-                        `Failed to ${editingTransactionId ? "update" : "add"} transaction`,
-                );
-            }
-
-            // Reset Form
-            setFormSymbol("");
-            setFormQuantity("");
-            setFormPrice("");
-            setFormFee("0");
-            setEditingTransactionId(null);
-            setShowAddForm(false);
-
-            // Refresh Data
-            refreshData();
-        } catch (err: any) {
-            setError(err.message);
-        } finally {
-            setFormSubmitting(false);
         }
     };
 
@@ -392,17 +297,21 @@ export default function Dashboard() {
     };
 
     // Format currency helpers
-    const fmt = (val: number) => {
-        const symbol =
-            displayCurrency === "USD"
-                ? "$"
-                : displayCurrency === "EUR"
-                  ? "€"
-                  : displayCurrency === "ILS"
-                    ? "₪"
-                    : displayCurrency + " ";
-        return `${symbol}${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const formatCurrency = (val: number, currency: string) => {
+        try {
+            return new Intl.NumberFormat(undefined, {
+                style: "currency",
+                currency: currency,
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            }).format(val);
+        } catch (e) {
+            console.error(`Error in formatCurrency(${val}, ${currency}):`, e);
+            return `${currency} ${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        }
     };
+
+    const fmt = (val: number) => formatCurrency(val, displayCurrency);
 
     const formatDate = (dateVal: string | Date) => {
         if (!dateVal) return "";
@@ -517,20 +426,13 @@ export default function Dashboard() {
                                 <span className="text-sm font-medium text-slate-400">
                                     Currency:
                                 </span>
-                                <select
+                                <CurrencySearchBox
                                     value={displayCurrency}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
+                                    onChange={(val) => {
                                         setDisplayCurrency(val);
                                         localStorage.setItem("portfolio_displayCurrency", val);
                                     }}
-                                    className="rounded-lg border border-slate-800 bg-slate-950 text-slate-100 px-3 py-1.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-sky-500"
-                                >
-                                    <option value="USD">USD ($)</option>
-                                    <option value="EUR">EUR (€)</option>
-                                    <option value="GBP">GBP (£)</option>
-                                    <option value="ILS">ILS (₪)</option>
-                                </select>
+                                />
                             </div>
 
                             <div className="h-6 w-px bg-slate-800"></div>
@@ -724,7 +626,11 @@ export default function Dashboard() {
                                     <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
                                 </div>
                             ) : history.length > 0 ? (
-                                <ResponsiveContainer width="100%" height="90%">
+                                <ResponsiveContainer
+                                    width="100%"
+                                    height="90%"
+                                    initialDimension={{ width: 500, height: 300 }}
+                                >
                                     <LineChart data={chartData}>
                                         <CartesianGrid
                                             strokeDasharray="3 3"
@@ -822,18 +728,12 @@ export default function Dashboard() {
                             <button
                                 type="button"
                                 onClick={() => {
-                                    setEditingTransactionId(null);
-                                    setFormSymbol("");
-                                    setFormType("BUY");
-                                    setFormQuantity("");
-                                    setFormPrice("");
-                                    setFormFee("0");
-                                    setFormDate(new Date().toISOString().split("T")[0]);
+                                    setEditingTransaction(null);
                                     setShowAddForm(true);
                                 }}
                                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white hover:bg-sky-500 transition-all shadow-md shadow-sky-900/20"
                             >
-                                <Plus className="h-4 w-4" /> Log Buy or Sell
+                                <Plus className="h-4 w-4" /> Add Transaction
                             </button>
 
                             <button
@@ -873,7 +773,9 @@ export default function Dashboard() {
                                 {clearing ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (
-                                    "Clear All Transactions"
+                                    <>
+                                        <Trash className="h-4 w-4" /> Clear All Transactions
+                                    </>
                                 )}
                             </button>
                         </div>
@@ -891,188 +793,22 @@ export default function Dashboard() {
                                 <br />
                                 Optional:{" "}
                                 <code className="bg-slate-900 px-1 rounded">currency</code>,{" "}
-                                <code className="bg-slate-900 px-1 rounded">fee</code>,{" "}
                                 <code className="bg-slate-900 px-1 rounded">transactionDate</code>.
                             </p>
                         </div>
                     </div>
                 </div>
 
-                {/* Add Transaction Dialog Form overlay */}
-                {showAddForm && (
-                    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-                        <div className="w-full max-w-md bg-slate-900 rounded-2xl p-6 shadow-2xl border border-slate-800 space-y-6">
-                            <div className="flex justify-between items-center">
-                                <h3 className="text-lg font-bold text-slate-100">
-                                    {editingTransactionId ? "Edit Transaction" : "Log Transaction"}
-                                </h3>
-                                <button
-                                    onClick={() => setShowAddForm(false)}
-                                    className="text-slate-400 hover:text-white text-sm font-semibold"
-                                >
-                                    Close
-                                </button>
-                            </div>
-
-                            <form onSubmit={handleAddTransaction} className="space-y-4">
-                                <div className="relative">
-                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                                        Ticker Symbol
-                                    </label>
-                                    <input
-                                        type="text"
-                                        required
-                                        placeholder="e.g. AAPL, VWCE.DE"
-                                        value={formSymbol}
-                                        onChange={(e) => handleSymbolChange(e.target.value)}
-                                        onFocus={() => {
-                                            if (formSymbol.trim().length >= 2)
-                                                setShowSuggestions(true);
-                                        }}
-                                        onBlur={() =>
-                                            setTimeout(() => setShowSuggestions(false), 200)
-                                        }
-                                        className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
-                                        autoComplete="off"
-                                    />
-
-                                    {showSuggestions && (
-                                        <div className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950 p-1 shadow-2xl">
-                                            {searching && suggestions.length === 0 ? (
-                                                <div className="flex items-center justify-center p-3 text-xs text-slate-500">
-                                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />{" "}
-                                                    Searching...
-                                                </div>
-                                            ) : suggestions.length > 0 ? (
-                                                <div className="divide-y divide-slate-900">
-                                                    {suggestions.map((item) => (
-                                                        <button
-                                                            key={item.symbol}
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setFormSymbol(item.symbol);
-                                                                setShowSuggestions(false);
-                                                                setSuggestions([]);
-                                                            }}
-                                                            className="flex w-full flex-col text-left px-3 py-2 text-xs hover:bg-slate-900 transition-all rounded-lg"
-                                                        >
-                                                            <div className="flex justify-between items-center w-full">
-                                                                <span className="font-bold text-white">
-                                                                    {item.symbol}
-                                                                </span>
-                                                                <span className="px-1.5 py-0.2 rounded text-[10px] font-bold uppercase bg-slate-900 text-slate-400">
-                                                                    {item.type}
-                                                                </span>
-                                                            </div>
-                                                            <span className="text-[11px] text-slate-400 truncate w-full mt-0.5">
-                                                                {item.name}
-                                                            </span>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            ) : !searching && formSymbol.trim().length >= 2 ? (
-                                                <div className="p-3 text-center text-xs text-slate-500">
-                                                    No results found
-                                                </div>
-                                            ) : null}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                                            Type
-                                        </label>
-                                        <select
-                                            value={formType}
-                                            onChange={(e) =>
-                                                setFormType(e.target.value as "BUY" | "SELL")
-                                            }
-                                            className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
-                                        >
-                                            <option value="BUY">BUY</option>
-                                            <option value="SELL">SELL</option>
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                                            Quantity
-                                        </label>
-                                        <input
-                                            type="number"
-                                            step="any"
-                                            required
-                                            placeholder="e.g. 5"
-                                            value={formQuantity}
-                                            onChange={(e) => setFormQuantity(e.target.value)}
-                                            className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                                            Price Per Share
-                                        </label>
-                                        <input
-                                            type="number"
-                                            step="any"
-                                            required
-                                            placeholder="e.g. 175.50"
-                                            value={formPrice}
-                                            onChange={(e) => setFormPrice(e.target.value)}
-                                            className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                                            Fee
-                                        </label>
-                                        <input
-                                            type="number"
-                                            step="any"
-                                            placeholder="e.g. 2.99"
-                                            value={formFee}
-                                            onChange={(e) => setFormFee(e.target.value)}
-                                            className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                                        Date
-                                    </label>
-                                    <input
-                                        type="date"
-                                        required
-                                        value={formDate}
-                                        onChange={(e) => setFormDate(e.target.value)}
-                                        className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
-                                    />
-                                </div>
-
-                                <button
-                                    type="submit"
-                                    disabled={formSubmitting}
-                                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white hover:bg-sky-500 transition-all disabled:opacity-50"
-                                >
-                                    {formSubmitting ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : editingTransactionId ? (
-                                        "Update Transaction"
-                                    ) : (
-                                        "Save Transaction"
-                                    )}
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                )}
+                <TransactionModal
+                    isOpen={showAddForm}
+                    onClose={() => {
+                        setShowAddForm(false);
+                        setEditingTransaction(null);
+                    }}
+                    portfolioId={portfolio?.id || ""}
+                    editingTransaction={editingTransaction}
+                    onSuccess={refreshData}
+                />
 
                 {/* Holdings Table */}
                 <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 shadow-md overflow-hidden">
@@ -1126,12 +862,12 @@ export default function Dashboard() {
                                             <td className="py-4 px-4">
                                                 {privacyMode
                                                     ? privacyModeText
-                                                    : `${h.currency === "USD" ? "$" : h.currency === "EUR" ? "€" : h.currency + " "}${h.avgBuyPrice.toFixed(2)}`}
+                                                    : formatCurrency(h.avgBuyPrice, h.currency)}
                                             </td>
                                             <td className="py-4 px-4">
                                                 {privacyMode
                                                     ? privacyModeText
-                                                    : `${h.currency === "USD" ? "$" : h.currency === "EUR" ? "€" : h.currency + " "}${h.currentPrice.toFixed(2)}`}
+                                                    : formatCurrency(h.currentPrice, h.currency)}
                                             </td>
                                             <td className="py-4 px-4">
                                                 {privacyMode
@@ -1203,24 +939,13 @@ export default function Dashboard() {
                                         <th className="pb-3 px-4">Action</th>
                                         <th className="pb-3 px-4">Shares</th>
                                         <th className="pb-3 px-4">Price</th>
-                                        <th className="pb-3 px-4">Fee</th>
                                         <th className="pb-3 px-4">Total</th>
                                         <th className="pb-3 pl-4 text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-850 text-slate-200 font-medium">
                                     {transactions.map((tx) => {
-                                        const totalCost =
-                                            tx.quantity * tx.pricePerShare +
-                                            (tx.type === "BUY" ? tx.fee : -tx.fee);
-                                        const sym =
-                                            tx.currency === "USD"
-                                                ? "$"
-                                                : tx.currency === "EUR"
-                                                  ? "€"
-                                                  : tx.currency === "ILS"
-                                                    ? "₪"
-                                                    : tx.currency + " ";
+                                        const totalCost = tx.quantity * tx.pricePerShare;
                                         return (
                                             <tr key={tx.id} className="hover:bg-slate-800/20">
                                                 <td className="py-4 pr-4">
@@ -1242,17 +967,15 @@ export default function Dashboard() {
                                                 <td className="py-4 px-4">
                                                     {privacyMode
                                                         ? privacyModeText
-                                                        : `${sym}${tx.pricePerShare.toFixed(2)}`}
-                                                </td>
-                                                <td className="py-4 px-4">
-                                                    {privacyMode
-                                                        ? privacyModeText
-                                                        : `${sym}${tx.fee.toFixed(2)}`}
+                                                        : formatCurrency(
+                                                              tx.pricePerShare,
+                                                              tx.currency,
+                                                          )}
                                                 </td>
                                                 <td className="py-4 px-4 font-semibold text-white">
                                                     {privacyMode
                                                         ? privacyModeText
-                                                        : `${sym}${totalCost.toFixed(2)}`}
+                                                        : formatCurrency(totalCost, tx.currency)}
                                                 </td>
                                                 <td className="py-4 pl-4 text-right">
                                                     <div className="flex justify-end gap-2">

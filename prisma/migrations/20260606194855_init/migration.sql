@@ -66,7 +66,6 @@ CREATE TABLE "Transaction" (
     "quantity" REAL NOT NULL,
     "pricePerShare" REAL NOT NULL,
     "currency" TEXT NOT NULL,
-    "fee" REAL NOT NULL DEFAULT 0.0,
     "transactionDate" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
