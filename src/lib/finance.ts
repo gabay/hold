@@ -153,15 +153,15 @@ export async function getExchangeRate(
     // Fetch from Frankfurter API
     try {
         const dateStr = dateKey.toISOString().split("T")[0];
-        const url = `https://api.frankfurter.dev/${dateStr}?from=${from}&to=${to}`;
+        const url = `https://api.frankfurter.dev/v2/rates?date=${dateStr}&base=${from}&quotes=${to}`;
 
         const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`Failed to fetch rate: ${response.statusText}`);
         }
 
-        const data = (await response.json()) as { rates?: Record<string, number> };
-        const rate = data.rates?.[to];
+        const data = (await response.json()) as [{ rate: number }];
+        const rate = data[0].rate;
 
         if (!rate) {
             throw new Error(`Rate not found for ${to}`);

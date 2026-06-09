@@ -70,6 +70,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                     : null;
             const transactionDate =
                 dateIdx !== -1 && row[dateIdx] ? new Date(row[dateIdx]) : new Date();
+            transactionDate.setHours(0, 0, 0, 0);
 
             if (isNaN(quantity) || isNaN(pricePerShare) || (type !== "BUY" && type !== "SELL")) {
                 return NextResponse.json(
