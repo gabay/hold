@@ -6,13 +6,13 @@ import { db } from "@/lib/db";
 // Construct providers array dynamically
 const providers: any[] = [];
 
-if (process.env.ALLOW_DEV_LOGIN === "true") {
+if (process.env.ALLOW_DEMO_LOGIN === "true") {
     providers.push(
         Credentials({
-            name: "Development Login",
+            name: "User",
             credentials: {
                 email: { label: "Email", type: "email", placeholder: "test@example.com" },
-                name: { label: "Name", type: "text", placeholder: "Test User" },
+                name: { label: "Name", type: "text", placeholder: "User" },
             },
             async authorize(credentials) {
                 if (!credentials?.email) return null;
@@ -25,7 +25,7 @@ if (process.env.ALLOW_DEV_LOGIN === "true") {
                     user = await db.user.create({
                         data: {
                             email: credentials.email as string,
-                            name: (credentials.name as string) || "Test User",
+                            name: (credentials.name as string) || "User",
                         },
                     });
                 }

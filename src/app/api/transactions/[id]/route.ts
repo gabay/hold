@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { getLiveAssetInfo } from "@/lib/finance";
+import { getAssetInfo } from "@/lib/finance";
 import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -35,15 +35,12 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
             );
         }
 
-        // Validate symbol and fetch its default trading currency
-        let assetInfo;
+        // Validate symbol exists.
         try {
-            assetInfo = await getLiveAssetInfo(symbol);
-        } catch (e) {
+            await getAssetInfo(symbol);
+        } catch (error: unknown) {
             return NextResponse.json(
-                {
-                    error: `Could not validate ticker symbol "${symbol}". Is it correct?`,
-                },
+                { error: `Error validating symbol "${symbol}": ${(error as Error).message || ""}` },
                 { status: 400 },
             );
         }
@@ -61,10 +58,10 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         });
 
         return NextResponse.json(transaction);
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error updating transaction:", error);
         return NextResponse.json(
-            { error: error.message || "Failed to update transaction" },
+            { error: (error as Error).message || "Failed to update transaction" },
             { status: 500 },
         );
     }
@@ -83,10 +80,10 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
             where: { id },
         });
         return NextResponse.json({ success: true });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error deleting transaction:", error);
         return NextResponse.json(
-            { error: error.message || "Failed to delete transaction" },
+            { error: (error as Error).message || "Failed to delete transaction" },
             { status: 500 },
         );
     }

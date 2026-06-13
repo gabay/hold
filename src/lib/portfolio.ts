@@ -1,280 +1,317 @@
+import { Transaction } from "@prisma/client";
 import { db } from "./db";
-import { getLiveAssetInfo, getHistoricalAssetPrice, getExchangeRate } from "./finance";
+import { getAssetInfo, getExchangeRate, AssetInfo, getPrice } from "./finance";
+import { DateInt, getDateInt, getDateString } from "./util";
 
-export interface AssetHolding {
-    symbol: string;
-    quantity: number;
-    totalCost: number; // Cost in transaction currency
-    avgBuyPrice: number; // Avg price in transaction currency
-    currentPrice: number; // Current price in asset currency
-    currency: string; // Asset trading currency (e.g. USD, EUR)
+export interface PortfolioData {
+    portfolioId: string;
+    name: string;
 
-    // Values converted to requested display currency
-    costInDisplayCurrency: number;
-    valueInDisplayCurrency: number;
-    profitInDisplayCurrency: number;
-    profitPercentage: number;
+    // portfolio summary (including holdings)
+    summary: PortfolioSummary;
+
+    // transactions
+    transactions: Transaction[];
+
+    // chart data
+    history: ChartDataPoint[];
 }
 
 export interface PortfolioSummary {
-    portfolioId: string;
-    name: string;
-    baseCurrency: string;
-    displayCurrency: string;
-    totalCost: number; // In display currency
-    totalValue: number; // In display currency
-    totalProfit: number; // In display currency
+    currency: string;
+    totalCost: number;
+    totalValue: number;
+    totalRealized: number;
+    totalProfit: number;
     totalProfitPercentage: number;
-    holdings: AssetHolding[];
+    assets: AssetData[];
+}
+
+export interface AssetData {
+    symbol: string;
+    currency: string;
+    quantity: number;
+
+    avgBuyPrice: number;
+    currentPrice: number;
+
+    cost: number;
+    value: number;
+    realized: number;
+    profit: number;
+    profitPercentage: number;
+
+    history: ChartDataPoint[];
 }
 
 export interface ChartDataPoint {
     date: string; // YYYY-MM-DD
     valuation: number;
     invested: number;
+    realized: number;
+}
+
+export interface DateIntValue {
+    timestamp: DateInt;
+    value: number;
 }
 
 /**
- * Calculates current valuation, cost basis, and holdings for a portfolio in a given display currency
+ * Calculate portfolio data
  */
-export async function getPortfolioSummary(
+export async function getPortfolioData(
     portfolioId: string,
-    displayCurrency: string = "USD",
-): Promise<PortfolioSummary> {
+    currency: string = "USD",
+    chartDays: DateInt[] = [],
+): Promise<PortfolioData> {
+    // get portfolio + transactions.
     const portfolio = await db.portfolio.findUnique({
         where: { id: portfolioId },
-        include: { transactions: true },
     });
-
     if (!portfolio) {
         throw new Error("Portfolio not found");
     }
 
-    const transactions = portfolio.transactions;
-    const holdingsMap = new Map<string, { quantity: number; totalCost: number }>();
-    const symbolToCurrencyMap = new Map<string, string>();
+    const transactions = await db.transaction.findMany({
+        where: { portfolioId: portfolioId },
+        orderBy: { transactionDate: "asc" },
+    });
 
-    // Process transactions to find net holdings and cost basis
-    for (const tx of transactions) {
-        const symbol = tx.symbol.toUpperCase();
+    // get asset data for every symbol.
+    const symbols = new Set(transactions.map((tx) => tx.symbol));
+    const assets = await Promise.all(
+        Array.from(symbols).map((symbol) =>
+            getAssetData(
+                symbol,
+                transactions.filter((tx) => tx.symbol === symbol),
+                currency,
+                chartDays,
+            ),
+        ),
+    );
 
-        // Get ticker currency (cached)
-        let tickerCurrency = symbolToCurrencyMap.get(symbol);
-        if (!tickerCurrency) {
-            const assetInfo = await getLiveAssetInfo(symbol);
-            tickerCurrency = assetInfo.currency;
-            symbolToCurrencyMap.set(symbol, tickerCurrency);
-        }
-
-        const current = holdingsMap.get(symbol) || { quantity: 0, totalCost: 0 };
-
-        // Determine transaction currency. If null/empty, use ticker currency.
-        const txCurrency = tx.currency || tickerCurrency;
-
-        // Convert price to ticker currency at transaction date
-        let priceInTickerCurrency = tx.pricePerShare;
-        if (txCurrency !== tickerCurrency) {
-            const rate = await getExchangeRate(txCurrency, tickerCurrency, tx.transactionDate);
-            priceInTickerCurrency = tx.pricePerShare * rate;
-        }
-
-        if (tx.type === "BUY") {
-            const addedQuantity = tx.quantity;
-            const addedCost = tx.quantity * priceInTickerCurrency;
-            holdingsMap.set(symbol, {
-                quantity: current.quantity + addedQuantity,
-                totalCost: current.totalCost + addedCost,
-            });
-        } else if (tx.type === "SELL") {
-            const removedQuantity = tx.quantity;
-            // Realized profit calculation can be added, but for holdings we just subtract quantity
-            const ratio =
-                current.quantity > 0 ? (current.quantity - removedQuantity) / current.quantity : 0;
-            holdingsMap.set(symbol, {
-                quantity: Math.max(0, current.quantity - removedQuantity),
-                // Reduce cost basis proportionally
-                totalCost: Math.max(0, current.totalCost * ratio),
-            });
-        }
-    }
-
-    const holdings: AssetHolding[] = [];
-    let totalCost = 0;
-    let totalValue = 0;
-
-    for (const [symbol, info] of holdingsMap.entries()) {
-        if (info.quantity <= 0) continue;
-
-        // Fetch live asset details
-        const liveInfo = await getLiveAssetInfo(symbol);
-        const avgBuyPrice = info.quantity > 0 ? info.totalCost / info.quantity : 0;
-
-        // Get exchange rate for the cost basis
-        // Note: For cost basis, we convert the total original cost in the transaction currency
-        // to the display currency at current rate OR transaction rate.
-        // For simplicity, we convert transaction-currency cost to display-currency using today's rate,
-        // or we can convert them individually during transaction logging.
-        // Let's get today's exchange rate for current price and cost.
-        const fxRateAssetToDisplay = await getExchangeRate(
-            liveInfo.currency,
-            displayCurrency,
-            new Date(),
-        );
-        if (fxRateAssetToDisplay === 0.0) {
-            continue;
-        }
-
-        // We assume transactions are logged in the asset's currency (standard behavior)
-        // If transaction currency differs from asset primary currency, we convert from transaction currency.
-        // In this app, transaction.currency will represent the currency the buy was executed in.
-        // Let's use today's rate for converting current valuation
-        const costInDisplayCurrency = info.totalCost * fxRateAssetToDisplay;
-        const valueInDisplayCurrency = info.quantity * liveInfo.price * fxRateAssetToDisplay;
-        const profitInDisplayCurrency = valueInDisplayCurrency - costInDisplayCurrency;
-        const profitPercentage =
-            costInDisplayCurrency > 0 ? (profitInDisplayCurrency / costInDisplayCurrency) * 100 : 0;
-
-        holdings.push({
-            symbol,
-            quantity: info.quantity,
-            totalCost: info.totalCost,
-            avgBuyPrice,
-            currentPrice: liveInfo.price,
-            currency: liveInfo.currency,
-            costInDisplayCurrency,
-            valueInDisplayCurrency,
-            profitInDisplayCurrency,
-            profitPercentage,
-        });
-
-        totalCost += costInDisplayCurrency;
-        totalValue += valueInDisplayCurrency;
-    }
-
-    const totalProfit = totalValue - totalCost;
+    // sum up all asset data to portfolio data.
+    const totalCost = assets.reduce((sum, asset) => sum + asset.cost, 0);
+    const totalValue = assets.reduce((sum, asset) => sum + asset.value, 0);
+    const totalRealized = assets.reduce((sum, asset) => sum + asset.realized, 0);
+    const totalProfit = totalValue + totalRealized - totalCost;
     const totalProfitPercentage = totalCost > 0 ? (totalProfit / totalCost) * 100 : 0;
 
     return {
-        portfolioId: portfolio.id,
+        portfolioId,
         name: portfolio.name,
-        baseCurrency: portfolio.baseCurrency,
-        displayCurrency,
-        totalCost,
-        totalValue,
-        totalProfit,
-        totalProfitPercentage,
-        holdings,
+        summary: {
+            currency,
+            totalCost,
+            totalValue,
+            totalRealized,
+            totalProfit,
+            totalProfitPercentage,
+            assets,
+        },
+        transactions: transactions.reverse(),
+        history: aggregateChartData(chartDays, assets),
     };
 }
 
 /**
- * Calculates portfolio valuation and invested capital daily over the last N days
+ * Calculates the asset data for a given symbol, including quantity, cost, value, and profit.
  */
-export async function getPortfolioHistory(
-    portfolioId: string,
-    displayCurrency: string = "USD",
-    days: number = 30,
-): Promise<ChartDataPoint[]> {
-    const portfolio = await db.portfolio.findUnique({
-        where: { id: portfolioId },
-        include: { transactions: true },
-    });
-
-    if (!portfolio) {
-        throw new Error("Portfolio not found");
-    }
-
-    const chartData: ChartDataPoint[] = [];
-    const today = new Date();
-
-    // Generate dates array for past N days (step weekly if 1 year or longer)
-    const dates: Date[] = [];
-    const step = days >= 365 ? 7 : 1;
-    for (let i = days - 1; i >= 0; i -= step) {
-        const d = new Date();
-        d.setDate(today.getDate() - i);
-        dates.push(new Date(d.toISOString().split("T")[0]));
-    }
-
-    // Pre-fetch ticker currencies to avoid rate limits/slowdowns in nested loops
-    const uniqueSymbols = Array.from(
-        new Set(portfolio.transactions.map((t) => t.symbol.toUpperCase())),
+async function getAssetData(
+    symbol: string,
+    transactions: Transaction[],
+    currency: string,
+    chartDays: DateInt[],
+): Promise<AssetData> {
+    // find the first transaction date
+    const firstActivity = new Date(
+        Math.min(...transactions.map((tx) => tx.transactionDate.getTime())),
     );
-    const symbolToCurrencyMap = new Map<string, string>();
-    for (const symbol of uniqueSymbols) {
-        try {
-            const assetInfo = await getLiveAssetInfo(symbol);
-            symbolToCurrencyMap.set(symbol, assetInfo.currency);
-        } catch (e) {
-            console.error(`Failed to get currency for ${symbol}`, e);
-            symbolToCurrencyMap.set(symbol, "USD"); // Fallback
-        }
-    }
+    // get asset info and transactions in currancy
+    const assetInfo = await getAssetInfo(symbol, firstActivity, currency);
+    const transactionsInCurrency = await convertTransactionsCurrency(transactions, currency);
 
-    // Calculate value for each date
-    for (const date of dates) {
-        const dateStr = date.toISOString().split("T")[0];
+    const calculator = new AssetDataCalculator(transactionsInCurrency, assetInfo);
+    const quantity = calculator.getQuantity();
+    const realized = calculator.getRealized();
+    const value = quantity * assetInfo.price;
+    const cost = calculator.getCost();
+    const profit = value + realized - cost;
+    const profitPercentage = cost > 0 ? (profit / cost) * 100 : 0;
 
-        // Filter transactions up to this date
-        const txsBeforeDate = portfolio.transactions.filter(
-            (tx) => new Date(tx.transactionDate.toISOString().split("T")[0]) <= date,
-        );
+    // TODO use splits to calculate current quantity
+    // TODO: use dividends + sells to calculate realized
 
-        const holdingsMap = new Map<string, { quantity: number; totalCost: number }>();
+    return {
+        symbol,
+        currency,
+        quantity,
+        avgBuyPrice: cost / quantity,
+        currentPrice: assetInfo.price,
+        cost,
+        value,
+        realized,
+        profit,
+        profitPercentage,
+        history: chartDays.map((day) => calculator.getChartDataPoint(day)),
+    };
+}
 
-        for (const tx of txsBeforeDate) {
-            const symbol = tx.symbol.toUpperCase();
-            const tickerCurrency = symbolToCurrencyMap.get(symbol) || "USD";
-            const current = holdingsMap.get(symbol) || { quantity: 0, totalCost: 0 };
-
-            const txCurrency = tx.currency || tickerCurrency;
-
-            let priceInTickerCurrency = tx.pricePerShare;
-            if (txCurrency !== tickerCurrency) {
-                const rate = await getExchangeRate(txCurrency, tickerCurrency, tx.transactionDate);
-                priceInTickerCurrency = tx.pricePerShare * rate;
+/**
+ * Converts all transactions to the specified currency.
+ */
+async function convertTransactionsCurrency(
+    transactions: Transaction[],
+    currency: string,
+): Promise<Transaction[]> {
+    return await Promise.all(
+        transactions.map(async (tx) => {
+            if (tx.currency === currency) {
+                return tx;
             }
+            return {
+                ...tx,
+                pricePerShare:
+                    tx.pricePerShare *
+                    (await getExchangeRate(tx.currency, currency, tx.transactionDate)),
+                currency,
+            };
+        }),
+    );
+}
 
-            if (tx.type === "BUY") {
-                holdingsMap.set(symbol, {
-                    quantity: current.quantity + tx.quantity,
-                    totalCost: current.totalCost + tx.quantity * priceInTickerCurrency,
-                });
-            } else if (tx.type === "SELL") {
-                const ratio =
-                    current.quantity > 0 ? (current.quantity - tx.quantity) / current.quantity : 0;
-                holdingsMap.set(symbol, {
-                    quantity: Math.max(0, current.quantity - tx.quantity),
-                    totalCost: Math.max(0, current.totalCost * ratio),
-                });
-            }
+/**
+ * Calculates statistics of the given asset, given the asset info and historic transactions.
+ * This class preforms some per-computation on initialization to allow efficient calculation of
+ * asset quantity, cost, realized profit, and chart data for any date.
+ */
+class AssetDataCalculator {
+    private transactions: Transaction[];
+    private assetInfo: AssetInfo;
+    private quantityByDate: DateIntValue[] = [];
+    private realizedByDate: DateIntValue[] = [];
+
+    constructor(transactions: Transaction[], assetInfo: AssetInfo) {
+        this.transactions = transactions;
+        this.assetInfo = assetInfo;
+
+        // splits + dividends should happen before buys and sells.
+        enum EventType {
+            Split = 1,
+            Dividend,
+            Buy,
+            Sell,
         }
 
-        let dailyValuation = 0;
-        let dailyInvested = 0;
-
-        for (const [symbol, info] of holdingsMap.entries()) {
-            if (info.quantity <= 0) continue;
-
-            // Get historical price for this symbol on this date
-            const { price, currency } = await getHistoricalAssetPrice(symbol, date);
-
-            // Get historical exchange rate on this date
-            const fxRate = await getExchangeRate(currency, displayCurrency, date);
-            if (fxRate === 0.0) {
-                continue;
-            }
-
-            dailyValuation += info.quantity * price * fxRate;
-            dailyInvested += info.totalCost * fxRate;
+        interface Event {
+            date: DateInt;
+            type: EventType;
+            value: number;
         }
 
-        chartData.push({
-            date: dateStr,
-            valuation: parseFloat(dailyValuation.toFixed(2)),
-            invested: parseFloat(dailyInvested.toFixed(2)),
+        // create a sorted list of events.
+        const events: Event[] = [];
+        this.transactions.forEach((tx) => {
+            events.push({
+                date: getDateInt(tx.transactionDate),
+                type: tx.type === "SELL" ? EventType.Sell : EventType.Buy,
+                value: tx.quantity,
+            });
+        });
+        this.assetInfo.splits?.entries().forEach(([date, multiplier]) => {
+            events.push({
+                date,
+                type: EventType.Split,
+                value: multiplier,
+            });
+        });
+        this.assetInfo.dividends?.entries().forEach(([date, amount]) => {
+            events.push({
+                date,
+                type: EventType.Dividend,
+                value: amount,
+            });
+        });
+        events.sort((a, b) => a.date - b.date || a.type - b.type);
+
+        let quantity = 0;
+        let realized = 0;
+
+        events.forEach((event) => {
+            switch (event.type) {
+                case EventType.Split:
+                    quantity *= event.value;
+                    this.quantityByDate.push({ timestamp: event.date, value: quantity });
+                    break;
+                case EventType.Dividend:
+                    realized += event.value * quantity;
+                    this.realizedByDate.push({ timestamp: event.date, value: realized });
+                    break;
+                case EventType.Buy:
+                    quantity += event.value;
+                    this.quantityByDate.push({ timestamp: event.date, value: quantity });
+                    break;
+                case EventType.Sell:
+                    quantity -= event.value;
+                    this.quantityByDate.push({ timestamp: event.date, value: quantity });
+                    break;
+            }
         });
     }
 
+    getQuantity(date: DateInt = getDateInt(new Date())): number {
+        // return the value of the biggest quantityByDate smaller than date, or 0
+        //
+        return this.quantityByDate.findLast((q) => q.timestamp <= date)?.value ?? 0;
+    }
+
+    getRealized(date: DateInt = getDateInt(new Date())): number {
+        return this.realizedByDate.findLast((q) => q.timestamp <= date)?.value ?? 0;
+    }
+
+    getCost(date: DateInt = getDateInt(new Date())): number {
+        return this.transactions
+            .filter((tx) => getDateInt(tx.transactionDate) <= date)
+            .reduce(
+                (cost, tx) =>
+                    tx.type === "SELL"
+                        ? cost - tx.pricePerShare * tx.quantity
+                        : cost + tx.pricePerShare * tx.quantity,
+                0,
+            );
+    }
+
+    getChartDataPoint(date: DateInt): ChartDataPoint {
+        return {
+            date: getDateString(date),
+            valuation: getPrice(this.assetInfo, date) * this.getQuantity(date),
+            invested: this.getCost(date),
+            realized: this.getRealized(date),
+        };
+    }
+}
+
+/**
+ * Aggregates chart data points for the given assets over a specified days.
+ * NOTE: this assumes that chartDays[], and all assets[][] arrays are the same length, and that all
+ * elements in index `i` refer to the same date.
+ */
+function aggregateChartData(chartDays: DateInt[], assets: AssetData[]): ChartDataPoint[] {
+    const chartData: ChartDataPoint[] = [];
+    for (let i = 0; i < chartDays.length; i++) {
+        const datapoint = {
+            date: getDateString(chartDays[i]),
+            valuation: 0,
+            invested: 0,
+            realized: 0,
+        };
+        for (const asset of assets) {
+            const history = asset.history[i];
+            datapoint.valuation += history.valuation;
+            datapoint.invested += history.invested;
+            datapoint.realized += history.realized;
+        }
+        chartData.push(datapoint);
+    }
     return chartData;
 }

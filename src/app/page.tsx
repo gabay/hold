@@ -31,36 +31,8 @@ import {
     Trash,
 } from "lucide-react";
 
-interface Holding {
-    symbol: string;
-    quantity: number;
-    totalCost: number;
-    avgBuyPrice: number;
-    currentPrice: number;
-    currency: string;
-    costInDisplayCurrency: number;
-    valueInDisplayCurrency: number;
-    profitInDisplayCurrency: number;
-    profitPercentage: number;
-}
-
-interface PortfolioSummary {
-    portfolioId: string;
-    name: string;
-    baseCurrency: string;
-    displayCurrency: string;
-    totalCost: number;
-    totalValue: number;
-    totalProfit: number;
-    totalProfitPercentage: number;
-    holdings: Holding[];
-}
-
-interface ChartDataPoint {
-    date: string;
-    valuation: number;
-    invested: number;
-}
+import { ChartDataPoint, PortfolioData, PortfolioSummary } from "@/lib/portfolio";
+import { Transaction } from "@prisma/client";
 
 export default function Dashboard() {
     const { data: session, status } = useSession();
@@ -68,12 +40,12 @@ export default function Dashboard() {
     const [portfolio, setPortfolio] = useState<{ id: string; name: string } | null>(null);
     const [summary, setSummary] = useState<PortfolioSummary | null>(null);
     const [history, setHistory] = useState<ChartDataPoint[]>([]);
-    const [transactions, setTransactions] = useState<any[]>([]);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [displayCurrency, setDisplayCurrency] = useState("USD");
     const [timeRange, setTimeRange] = useState("30"); // "30" | "ytd" | "365" | "1825" | "max"
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [activeProviders, setActiveProviders] = useState<Record<string, any> | null>(null);
+    const [activeProviders, setActiveProviders] = useState<Record<string, object> | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [privacyMode, setPrivacyMode] = useState(false);
     const privacyModeText = "••••••";
@@ -97,7 +69,7 @@ export default function Dashboard() {
 
     // Transaction Form state
     const [showAddForm, setShowAddForm] = useState(false);
-    const [editingTransaction, setEditingTransaction] = useState<any | null>(null);
+    const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
     // Import CSV state
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -148,34 +120,20 @@ export default function Dashboard() {
             setLoading(true);
             setError(null);
 
-            const summaryPromise = fetch(
-                `/api/portfolio/${portfolio.id}/summary?currency=${displayCurrency}`,
-                { cache: "no-store" },
-            ).then((res) => {
-                if (!res.ok) throw new Error("Failed to fetch summary");
-                return res.json() as Promise<PortfolioSummary>;
-            });
-
-            const historyPromise = fetch(
-                `/api/portfolio/${portfolio.id}/history?currency=${displayCurrency}&days=${timeRange}`,
-                { cache: "no-store" },
-            ).then((res) => {
-                if (!res.ok) throw new Error("Failed to fetch performance history");
-                return res.json() as Promise<ChartDataPoint[]>;
-            });
-
-            const txPromise = fetch(`/api/portfolio/${portfolio.id}/transactions`, {
-                cache: "no-store",
-            }).then((res) => {
-                if (!res.ok) throw new Error("Failed to fetch transactions");
-                return res.json() as Promise<any[]>;
-            });
-
-            Promise.all([summaryPromise, historyPromise, txPromise])
-                .then(([sumData, histData, txData]) => {
-                    setSummary(sumData);
-                    setHistory(histData);
-                    setTransactions(txData);
+            fetch(
+                `/api/portfolio/${portfolio.id}/data?currency=${displayCurrency}&days=${timeRange}`,
+                {
+                    cache: "no-store",
+                },
+            )
+                .then((res) => {
+                    if (!res.ok) throw new Error("Failed to fetch performance data");
+                    return res.json();
+                })
+                .then((pd: PortfolioData) => {
+                    setSummary(pd.summary);
+                    setHistory(pd.history);
+                    setTransactions(pd.transactions);
                     setLoading(false);
                 })
                 .catch((err) => {
@@ -187,26 +145,27 @@ export default function Dashboard() {
 
     const refreshData = () => {
         if (portfolio?.id) {
-            fetch(`/api/portfolio/${portfolio.id}/summary?currency=${displayCurrency}`, {
-                cache: "no-store",
-            })
-                .then((res) => res.json())
-                .then((data) => setSummary(data));
-
             fetch(
-                `/api/portfolio/${portfolio.id}/history?currency=${displayCurrency}&days=${timeRange}`,
-                { cache: "no-store" },
+                `/api/portfolio/${portfolio.id}/data?currency=${displayCurrency}&days=${timeRange}`,
+                {
+                    cache: "no-store",
+                },
             )
                 .then((res) => res.json())
-                .then((data) => setHistory(data));
-
-            fetch(`/api/portfolio/${portfolio.id}/transactions`, { cache: "no-store" })
-                .then((res) => res.json())
-                .then((data) => setTransactions(data));
+                .then((pd: PortfolioData) => {
+                    setSummary(pd.summary);
+                    setHistory(pd.history);
+                    setTransactions(pd.transactions);
+                    setLoading(false);
+                })
+                .catch((err) => {
+                    setError(err.message);
+                    setLoading(false);
+                });
         }
     };
 
-    const startEditTransaction = (tx: any) => {
+    const startEditTransaction = (tx: Transaction) => {
         setEditingTransaction(tx);
         setShowAddForm(true);
     };
@@ -223,8 +182,8 @@ export default function Dashboard() {
             if (!res.ok) throw new Error("Failed to delete transaction");
 
             refreshData();
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError((err as Error).message);
         }
     };
 
@@ -260,8 +219,8 @@ export default function Dashboard() {
                 setSuccessMessage(null);
             }, 3000);
             refreshData();
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError((err as Error).message);
         } finally {
             setImporting(false);
             if (fileInputRef.current) fileInputRef.current.value = "";
@@ -289,8 +248,8 @@ export default function Dashboard() {
                 setSuccessMessage(null);
             }, 3000);
             refreshData();
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError((err as Error).message);
         } finally {
             setClearing(false);
         }
@@ -324,7 +283,8 @@ export default function Dashboard() {
 
     const chartData = history.map((d) => ({
         ...d,
-        percentReturn: d.invested > 0 ? ((d.valuation - d.invested) / d.invested) * 100 : 0,
+        percentReturn:
+            d.invested > 0 ? ((d.valuation + d.realized - d.invested) / d.invested) * 100 : 0,
     }));
 
     if (status === "loading") {
@@ -346,7 +306,7 @@ export default function Dashboard() {
                             alt="Hold Logo"
                             className="h-16 w-16 rounded-2xl shadow-lg border border-slate-800"
                         />
-                        <h2 className="mt-4 text-3xl font-extrabold tracking-tight bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
+                        <h2 className="mt-4 text-3xl font-extrabold tracking-tight bg-linear-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
                             Hold
                         </h2>
                         <p className="mt-2 text-sm text-slate-400">Simple Portfolio Tracker</p>
@@ -371,11 +331,11 @@ export default function Dashboard() {
                             <>
                                 {activeProviders.oidc && (
                                     <div className="relative flex py-4 items-center">
-                                        <div className="flex-grow border-t border-slate-800"></div>
-                                        <span className="flex-shrink mx-4 text-slate-500 text-xs uppercase font-medium">
-                                            Or Dev Login
+                                        <div className="grow border-t border-slate-800"></div>
+                                        <span className="shrink mx-4 text-slate-500 text-xs uppercase font-medium">
+                                            Or Demo Logins
                                         </span>
-                                        <div className="flex-grow border-t border-slate-800"></div>
+                                        <div className="grow border-t border-slate-800"></div>
                                     </div>
                                 )}
                                 <button
@@ -387,7 +347,7 @@ export default function Dashboard() {
                                     }
                                     className="flex w-full justify-center rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-300 hover:bg-slate-850 hover:text-white focus:outline-none focus:ring-2 focus:ring-slate-700 transition-all"
                                 >
-                                    Access Demo Workspace
+                                    Access Demo Portfolio
                                 </button>
                             </>
                         )}
@@ -416,7 +376,7 @@ export default function Dashboard() {
                                 alt="Hold Logo"
                                 className="h-7 w-7 rounded-lg shadow-md border border-slate-800"
                             />
-                            <span className="text-xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
+                            <span className="text-xl font-bold bg-linear-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
                                 Hold
                             </span>
                         </div>
@@ -469,7 +429,7 @@ export default function Dashboard() {
             </header>
 
             {/* Main dashboard content */}
-            <main className="flex-grow mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
+            <main className="grow mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
                 {error && (
                     <div className="rounded-xl border border-red-900 bg-red-950/40 p-4 text-sm text-red-300">
                         {error}
@@ -564,7 +524,7 @@ export default function Dashboard() {
                 {/* Charts & Actions Section */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Performance line chart */}
-                    <div className="lg:col-span-2 rounded-2xl border border-slate-800 bg-slate-900/40 p-6 shadow-md flex flex-col justify-between h-[400px]">
+                    <div className="lg:col-span-2 rounded-2xl border border-slate-800 bg-slate-900/40 p-6 shadow-md flex flex-col justify-between h-100">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
                             <h3 className="text-lg font-bold text-slate-100">Valuation History</h3>
                             <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
@@ -656,7 +616,7 @@ export default function Dashboard() {
                                         />
                                         <Tooltip
                                             labelFormatter={(label) => formatDate(label)}
-                                            formatter={(value: any, name: any) => {
+                                            formatter={(value: unknown, name: unknown) => {
                                                 if (privacyMode && name === "Return")
                                                     return `${Number(value).toFixed(2)}%`;
                                                 return privacyMode
@@ -699,6 +659,14 @@ export default function Dashboard() {
                                                     stroke="#6366f1"
                                                     strokeWidth={2}
                                                     strokeDasharray="5 5"
+                                                    dot={false}
+                                                />
+                                                <Line
+                                                    type="monotone"
+                                                    dataKey="realized"
+                                                    name="Realized Profit"
+                                                    stroke="#50c878"
+                                                    strokeWidth={3}
                                                     dot={false}
                                                 />
                                             </>
@@ -823,7 +791,7 @@ export default function Dashboard() {
                                 ></div>
                             ))}
                         </div>
-                    ) : summary && summary.holdings.length > 0 ? (
+                    ) : summary && summary.assets.length > 0 ? (
                         <div className="overflow-x-auto">
                             <table className="w-full text-left text-sm text-slate-400 border-collapse">
                                 <thead>
@@ -844,61 +812,63 @@ export default function Dashboard() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-850 text-slate-200 font-medium">
-                                    {summary.holdings.map((h) => (
-                                        <tr key={h.symbol} className="hover:bg-slate-800/20">
+                                    {summary.assets.map((asset) => (
+                                        <tr key={asset.symbol} className="hover:bg-slate-800/20">
                                             <td className="py-4 pr-4">
                                                 <div className="flex flex-col">
                                                     <span className="font-bold text-white">
-                                                        {h.symbol}
+                                                        {asset.symbol}
                                                     </span>
                                                     <span className="text-xs text-slate-500 uppercase">
-                                                        {h.currency}
+                                                        {asset.currency}
                                                     </span>
                                                 </div>
                                             </td>
                                             <td className="py-4 px-4">
-                                                {privacyMode ? privacyModeText : h.quantity}
+                                                {privacyMode ? privacyModeText : asset.quantity}
                                             </td>
                                             <td className="py-4 px-4">
                                                 {privacyMode
                                                     ? privacyModeText
-                                                    : formatCurrency(h.avgBuyPrice, h.currency)}
+                                                    : formatCurrency(
+                                                          asset.avgBuyPrice,
+                                                          asset.currency,
+                                                      )}
                                             </td>
                                             <td className="py-4 px-4">
                                                 {privacyMode
                                                     ? privacyModeText
-                                                    : formatCurrency(h.currentPrice, h.currency)}
+                                                    : formatCurrency(
+                                                          asset.currentPrice,
+                                                          asset.currency,
+                                                      )}
                                             </td>
                                             <td className="py-4 px-4">
-                                                {privacyMode
-                                                    ? privacyModeText
-                                                    : fmt(h.costInDisplayCurrency)}
+                                                {privacyMode ? privacyModeText : fmt(asset.cost)}
                                             </td>
                                             <td className="py-4 px-4">
-                                                {privacyMode
-                                                    ? privacyModeText
-                                                    : fmt(h.valueInDisplayCurrency)}
+                                                {privacyMode ? privacyModeText : fmt(asset.value)}
                                             </td>
                                             <td
-                                                className={`py-4 pl-4 text-right ${h.profitInDisplayCurrency >= 0 ? "text-emerald-450" : "text-rose-455"}`}
+                                                className={`py-4 pl-4 text-right ${asset.profit >= 0 ? "text-emerald-450" : "text-rose-455"}`}
                                             >
                                                 <div className="flex flex-col items-end">
                                                     <span
                                                         className={
-                                                            h.profitInDisplayCurrency >= 0
+                                                            asset.profit >= 0
                                                                 ? "text-emerald-400"
                                                                 : "text-rose-450"
                                                         }
                                                     >
                                                         {privacyMode
                                                             ? privacyModeText
-                                                            : `${h.profitInDisplayCurrency >= 0 ? "+" : ""}${fmt(h.profitInDisplayCurrency)}`}
+                                                            : `${asset.profit >= 0 ? "+" : ""}${fmt(asset.profit)}`}
                                                     </span>
                                                     <span
-                                                        className={`text-xs font-bold ${h.profitInDisplayCurrency >= 0 ? "text-emerald-400" : "text-rose-450"}`}
+                                                        className={`text-xs font-bold ${asset.profit >= 0 ? "text-emerald-400" : "text-rose-450"}`}
                                                     >
-                                                        {h.profitInDisplayCurrency >= 0 ? "+" : ""}
-                                                        {h.profitPercentage.toFixed(2)}%
+                                                        {asset.profit >= 0 ? "+" : ""}
+                                                        {asset.profitPercentage.toFixed(2)}%
                                                     </span>
                                                 </div>
                                             </td>

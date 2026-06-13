@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
 import { NextRequest, NextResponse } from "next/server";
+import { getDateInt } from "@/lib/util";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     const session = await auth();
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             );
         }
 
-        const newTransactions: any[] = [];
+        const newTransactions: object[] = [];
 
         // Parse all rows first
         for (let i = 1; i < lines.length; i++) {
@@ -65,12 +66,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             const quantity = parseFloat(row[quantityIdx]);
             const pricePerShare = parseFloat(row[priceIdx]);
             const currency =
-                currencyIdx !== -1 && row[currencyIdx]
-                    ? row[currencyIdx].toUpperCase().trim()
-                    : null;
-            const transactionDate =
-                dateIdx !== -1 && row[dateIdx] ? new Date(row[dateIdx]) : new Date();
-            transactionDate.setHours(0, 0, 0, 0);
+                currencyIdx !== -1 && row[currencyIdx] ? row[currencyIdx].toUpperCase().trim() : "";
+            const transactionDate = getDateInt(
+                dateIdx !== -1 && row[dateIdx] ? new Date(row[dateIdx]) : new Date(),
+            );
 
             if (isNaN(quantity) || isNaN(pricePerShare) || (type !== "BUY" && type !== "SELL")) {
                 return NextResponse.json(
@@ -92,7 +91,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                 type,
                 quantity,
                 pricePerShare,
-                currency: currency || null,
+                currency: currency,
                 transactionDate,
             });
         }
@@ -101,10 +100,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         await db.$transaction(newTransactions.map((tx) => db.transaction.create({ data: tx })));
 
         return NextResponse.json({ success: true, count: newTransactions.length });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error importing transactions:", error);
         return NextResponse.json(
-            { error: error.message || "Failed to import transactions" },
+            { error: (error as Error).message || "Failed to import transactions" },
             { status: 500 },
         );
     }

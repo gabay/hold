@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     try {
         const results = await searchAssets(query);
         return NextResponse.json(results);
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in finance search api route:", error);
         return NextResponse.json({ error: "Search failed" }, { status: 500 });
     }

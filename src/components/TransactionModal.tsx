@@ -3,12 +3,15 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
+import { getDateString } from "@/lib/util";
+import { Transaction } from "@prisma/client";
+import { SearchAssetResult } from "@/lib/finance";
 
 interface TransactionModalProps {
     isOpen: boolean;
     onClose: () => void;
     portfolioId: string;
-    editingTransaction: any | null;
+    editingTransaction: Transaction | null;
     onSuccess: () => void;
 }
 
@@ -20,16 +23,16 @@ export default function TransactionModal({
     onSuccess,
 }: TransactionModalProps) {
     const [formSymbol, setFormSymbol] = useState("");
-    const [formType, setFormType] = useState<"BUY" | "SELL">("BUY");
+    const [formType, setFormType] = useState<string>("BUY");
     const [formQuantity, setFormQuantity] = useState("");
     const [formPrice, setFormPrice] = useState("");
     const [formCurrency, setFormCurrency] = useState("");
-    const [formDate, setFormDate] = useState(new Date().toISOString().split("T")[0]);
+    const [formDate, setFormDate] = useState(getDateString(new Date()));
     const [formSubmitting, setFormSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     // Autocomplete states
-    const [suggestions, setSuggestions] = useState<any[]>([]);
+    const [suggestions, setSuggestions] = useState<SearchAssetResult[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [searching, setSearching] = useState(false);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -44,16 +47,14 @@ export default function TransactionModal({
                 setFormQuantity(editingTransaction.quantity.toString());
                 setFormPrice(editingTransaction.pricePerShare.toString());
                 setFormCurrency(editingTransaction.currency || "");
-                setFormDate(
-                    new Date(editingTransaction.transactionDate).toISOString().split("T")[0],
-                );
+                setFormDate(getDateString(new Date(editingTransaction.transactionDate)));
             } else {
                 setFormSymbol("");
                 setFormType("BUY");
                 setFormQuantity("");
                 setFormPrice("");
                 setFormCurrency("");
-                setFormDate(new Date().toISOString().split("T")[0]);
+                setFormDate(getDateString(new Date()));
             }
             setError(null);
         }
@@ -179,8 +180,8 @@ export default function TransactionModal({
 
             onSuccess();
             onClose();
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError((err as Error).message);
         } finally {
             setFormSubmitting(false);
         }
@@ -285,7 +286,7 @@ export default function TransactionModal({
                             </label>
                             <select
                                 value={formType}
-                                onChange={(e) => setFormType(e.target.value as "BUY" | "SELL")}
+                                onChange={(e) => setFormType(e.target.value)}
                                 className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
                             >
                                 <option value="BUY">BUY</option>
