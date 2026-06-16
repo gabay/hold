@@ -2,7 +2,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
 import { NextRequest, NextResponse } from "next/server";
-import { getDateInt } from "@/lib/util";
+import { getDate } from "@/lib/util";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     const session = await auth();
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             );
         }
 
-        const newTransactions: object[] = [];
+        const newTransactions = [];
 
         // Parse all rows first
         for (let i = 1; i < lines.length; i++) {
@@ -67,9 +67,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             const pricePerShare = parseFloat(row[priceIdx]);
             const currency =
                 currencyIdx !== -1 && row[currencyIdx] ? row[currencyIdx].toUpperCase().trim() : "";
-            const transactionDate = getDateInt(
-                dateIdx !== -1 && row[dateIdx] ? new Date(row[dateIdx]) : new Date(),
-            );
+            const transactionDate =
+                dateIdx !== -1 && row[dateIdx] ? getDate(row[dateIdx]) : getDate();
 
             if (isNaN(quantity) || isNaN(pricePerShare) || (type !== "BUY" && type !== "SELL")) {
                 return NextResponse.json(

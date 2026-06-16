@@ -1,16 +1,23 @@
 import { auth } from "@/auth";
-import { db } from "@/lib/db";
+import { db, checkUserPortfolioTransaction } from "@/lib/db";
 import { getAssetInfo } from "@/lib/finance";
 import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
 import { NextRequest, NextResponse } from "next/server";
+import { getDate } from "@/lib/util";
 
-export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+export async function PUT(
+    req: NextRequest,
+    ctx: { params: Promise<{ id: string; txid: string }> },
+) {
     const session = await auth();
-    if (!session || !session.user?.id) {
+    const { id, txid } = await ctx.params;
+    if (
+        !session ||
+        !session.user?.id ||
+        !(await checkUserPortfolioTransaction(session.user.id, id, txid))
+    ) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const { id } = await ctx.params;
 
     try {
         const body = await req.json();
@@ -27,8 +34,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
             );
         }
 
-        const normalizedCurrency = currency ? currency.toUpperCase().trim() : null;
-        if (normalizedCurrency && !SUPPORTED_CURRENCIES[normalizedCurrency]) {
+        if (currency && !SUPPORTED_CURRENCIES[currency]) {
             return NextResponse.json(
                 { error: `Unsupported currency "${currency}"` },
                 { status: 400 },
@@ -46,14 +52,14 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
         }
 
         const transaction = await db.transaction.update({
-            where: { id },
+            where: { portfolioId: id, id: txid },
             data: {
                 symbol: symbol.toUpperCase(),
                 type,
                 quantity: parseFloat(quantity),
                 pricePerShare: parseFloat(pricePerShare),
-                currency: normalizedCurrency,
-                transactionDate: new Date(transactionDate),
+                currency: currency,
+                transactionDate: getDate(transactionDate),
             },
         });
 
@@ -67,17 +73,23 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     }
 }
 
-export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+export async function DELETE(
+    req: NextRequest,
+    ctx: { params: Promise<{ id: string; txid: string }> },
+) {
     const session = await auth();
-    if (!session || !session.user?.id) {
+    const { id, txid } = await ctx.params;
+    if (
+        !session ||
+        !session.user?.id ||
+        !(await checkUserPortfolioTransaction(session.user.id, id, txid))
+    ) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = await ctx.params;
-
     try {
         await db.transaction.delete({
-            where: { id },
+            where: { portfolioId: id, id: txid },
         });
         return NextResponse.json({ success: true });
     } catch (error: unknown) {

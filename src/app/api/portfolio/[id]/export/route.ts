@@ -1,8 +1,9 @@
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { Transaction } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     const session = await auth();
     if (!session || !session.user?.id) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -20,8 +21,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         const headers = "symbol,type,quantity,pricePerShare,currency,transactionDate\n";
         const rows = transactions
             .map(
-                (tx: any) =>
-                    `"${tx.symbol}","${tx.type}",${tx.quantity},${tx.pricePerShare},"${tx.currency || ""}","${tx.transactionDate.toISOString()}"`,
+                (tx: Transaction) =>
+                    `"${tx.symbol}","${tx.type}",${tx.quantity},${tx.pricePerShare},"${tx.currency}","${tx.transactionDate.toISOString()}"`,
             )
             .join("\n");
 
@@ -31,10 +32,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
             status: 200,
             headers: {
                 "Content-Type": "text/csv",
-                "Content-Disposition": `attachment; filename="portfolio_${id}_export.csv"`,
+                "Content-Disposition": `attachment; filename="portfolio_export_${id}.csv"`,
             },
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error exporting portfolio:", error);
         return NextResponse.json({ error: "Failed to export transactions" }, { status: 500 });
     }

@@ -1,7 +1,7 @@
 import { Transaction } from "@prisma/client";
 import { db } from "./db";
 import { getAssetInfo, getExchangeRate, AssetInfo, getPrice } from "./finance";
-import { DateInt, getDateInt, getDateString } from "./util";
+import { DateInt, getDateInt, getDateString, getDate } from "./util";
 
 export interface PortfolioData {
     portfolioId: string;
@@ -62,7 +62,7 @@ export interface DateIntValue {
 export async function getPortfolioData(
     portfolioId: string,
     currency: string = "USD",
-    chartDays: DateInt[] = [],
+    chartDays: Date[] = [],
 ): Promise<PortfolioData> {
     // get portfolio + transactions.
     const portfolio = await db.portfolio.findUnique({
@@ -121,10 +121,10 @@ async function getAssetData(
     symbol: string,
     transactions: Transaction[],
     currency: string,
-    chartDays: DateInt[],
+    chartDays: Date[],
 ): Promise<AssetData> {
     // find the first transaction date
-    const firstActivity = new Date(
+    const firstActivity = getDate(
         Math.min(...transactions.map((tx) => tx.transactionDate.getTime())),
     );
     // get asset info and transactions in currancy
@@ -138,9 +138,6 @@ async function getAssetData(
     const cost = calculator.getCost();
     const profit = value + realized - cost;
     const profitPercentage = cost > 0 ? (profit / cost) * 100 : 0;
-
-    // TODO use splits to calculate current quantity
-    // TODO: use dividends + sells to calculate realized
 
     return {
         symbol,
@@ -195,81 +192,65 @@ class AssetDataCalculator {
         this.transactions = transactions;
         this.assetInfo = assetInfo;
 
-        // splits + dividends should happen before buys and sells.
-        enum EventType {
-            Split = 1,
-            Dividend,
-            Buy,
-            Sell,
-        }
+        let quantity = 0;
+        let realized = 0;
 
         interface Event {
             date: DateInt;
-            type: EventType;
-            value: number;
+            priority: number; // splits/dividends should happen before buys/sells on same day.
+            apply: () => void;
         }
 
-        // create a sorted list of events.
+        // create a list of events.
         const events: Event[] = [];
-        this.transactions.forEach((tx) => {
-            events.push({
-                date: getDateInt(tx.transactionDate),
-                type: tx.type === "SELL" ? EventType.Sell : EventType.Buy,
-                value: tx.quantity,
-            });
-        });
         this.assetInfo.splits?.entries().forEach(([date, multiplier]) => {
             events.push({
                 date,
-                type: EventType.Split,
-                value: multiplier,
+                priority: 1,
+                apply: () => (quantity *= multiplier),
             });
         });
         this.assetInfo.dividends?.entries().forEach(([date, amount]) => {
             events.push({
                 date,
-                type: EventType.Dividend,
-                value: amount,
+                priority: 2,
+                apply: () => (realized += amount * quantity),
             });
         });
-        events.sort((a, b) => a.date - b.date || a.type - b.type);
-
-        let quantity = 0;
-        let realized = 0;
-
-        events.forEach((event) => {
-            switch (event.type) {
-                case EventType.Split:
-                    quantity *= event.value;
-                    this.quantityByDate.push({ timestamp: event.date, value: quantity });
-                    break;
-                case EventType.Dividend:
-                    realized += event.value * quantity;
-                    this.realizedByDate.push({ timestamp: event.date, value: realized });
-                    break;
-                case EventType.Buy:
-                    quantity += event.value;
-                    this.quantityByDate.push({ timestamp: event.date, value: quantity });
-                    break;
-                case EventType.Sell:
-                    quantity -= event.value;
-                    this.quantityByDate.push({ timestamp: event.date, value: quantity });
-                    break;
-            }
+        this.transactions.forEach((tx) => {
+            events.push({
+                date: getDateInt(tx.transactionDate),
+                priority: 3,
+                apply: () => (quantity += tx.type === "BUY" ? tx.quantity : -tx.quantity),
+            });
         });
+
+        events
+            .sort((a, b) => a.date - b.date || a.priority - b.priority)
+            .forEach((event) => {
+                const prevQuantity = quantity;
+                const prevRealized = realized;
+                event.apply();
+                if (quantity !== prevQuantity) {
+                    this.quantityByDate.push({ timestamp: event.date, value: quantity });
+                }
+                if (realized !== prevRealized) {
+                    this.realizedByDate.push({ timestamp: event.date, value: realized });
+                }
+            });
     }
 
-    getQuantity(date: DateInt = getDateInt(new Date())): number {
+    getQuantity(date: DateInt = getDateInt()): number {
         // return the value of the biggest quantityByDate smaller than date, or 0
         //
         return this.quantityByDate.findLast((q) => q.timestamp <= date)?.value ?? 0;
     }
 
-    getRealized(date: DateInt = getDateInt(new Date())): number {
+    getRealized(date: DateInt = getDateInt()): number {
         return this.realizedByDate.findLast((q) => q.timestamp <= date)?.value ?? 0;
     }
 
-    getCost(date: DateInt = getDateInt(new Date())): number {
+    getCost(date: DateInt = getDateInt()): number {
         return this.transactions
             .filter((tx) => getDateInt(tx.transactionDate) <= date)
             .reduce(
@@ -281,12 +262,13 @@ class AssetDataCalculator {
             );
     }
 
-    getChartDataPoint(date: DateInt): ChartDataPoint {
+    getChartDataPoint(date: Date): ChartDataPoint {
+        const dateInt = getDateInt(date);
         return {
             date: getDateString(date),
-            valuation: getPrice(this.assetInfo, date) * this.getQuantity(date),
-            invested: this.getCost(date),
-            realized: this.getRealized(date),
+            valuation: getPrice(this.assetInfo, dateInt) * this.getQuantity(dateInt),
+            invested: this.getCost(dateInt),
+            realized: this.getRealized(dateInt),
         };
     }
 }
@@ -296,7 +278,7 @@ class AssetDataCalculator {
  * NOTE: this assumes that chartDays[], and all assets[][] arrays are the same length, and that all
  * elements in index `i` refer to the same date.
  */
-function aggregateChartData(chartDays: DateInt[], assets: AssetData[]): ChartDataPoint[] {
+function aggregateChartData(chartDays: Date[], assets: AssetData[]): ChartDataPoint[] {
     const chartData: ChartDataPoint[] = [];
     for (let i = 0; i < chartDays.length; i++) {
         const datapoint = {

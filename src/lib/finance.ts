@@ -3,12 +3,8 @@ const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 import NodeCache from "node-cache";
 const cache = new NodeCache({ stdTTL: 300, checkperiod: 300 });
 
-import { getDateString as getDateString, getDateInt, DateInt, addDays } from "./util";
+import { getDateString as getDateString, getDateInt, DateInt, addDays, getDate } from "./util";
 import { SearchQuoteYahoo } from "yahoo-finance2/modules/search";
-
-export interface DividendProvider {
-    getDividendsOn(date: Date): Promise<number>;
-}
 
 export interface AssetInfo {
     symbol: string;
@@ -28,14 +24,18 @@ export interface ExchangeRates {
     rates: Map<DateInt, number>;
 }
 
-export interface SearchAssetResult { symbol: string; name: string; type: string };
+export interface SearchAssetResult {
+    symbol: string;
+    name: string;
+    type: string;
+}
 
 /**
  * Fetches current price and currency metadata for a symbol
  */
 export async function getAssetInfo(
     symbol: string,
-    fromDate: Date = new Date(),
+    fromDate: Date = getDate(),
     currency?: string,
 ): Promise<AssetInfo> {
     const cache_key = `asset-${symbol}`;
@@ -155,14 +155,17 @@ export function getPrice(assetInfo: AssetInfo, date: DateInt): number {
 export async function getExchangeRate(
     baseCurrency: string,
     targetCurrency: string,
-    date: Date = new Date(),
+    date: Date = getDate(),
 ): Promise<number> {
     const exchangeRates = await getExchangeRates(baseCurrency, targetCurrency, date);
-    return (
-        exchangeRates?.rates.get(getDateInt(date)) ||
-        exchangeRates?.rates.get(addDays(date, -1)) ||
-        1.0
-    );
+    const dateInt = getDateInt(date);
+    const rate =
+        exchangeRates?.rates.get(dateInt) ||
+        exchangeRates?.rates.get(addDays(dateInt, -1)) ||
+        exchangeRates?.rates.get(addDays(dateInt, 1));
+    if (rate === undefined)
+        throw new Error(`No exchange rate for ${baseCurrency} -> ${targetCurrency} on ${date}`);
+    return rate;
 }
 
 /**
@@ -204,7 +207,7 @@ export async function getExchangeRates(
             baseCurrency,
             targetCurrency,
             fromDate,
-            rates: new Map(data.map(({ date, rate }) => [getDateInt(new Date(date)), rate])),
+            rates: new Map(data.map(({ date, rate }) => [getDateInt(getDate(date)), rate])),
         };
         cache.set(cache_key, exchangeRates);
         return exchangeRates;
@@ -231,9 +234,7 @@ function reverseExchangeRates(exchangeRates: ExchangeRates): ExchangeRates {
 /**
  * Searches symbols matching a query string
  */
-export async function searchAssets(
-    query: string,
-): Promise<Array<SearchAssetResult>> {
+export async function searchAssets(query: string): Promise<Array<SearchAssetResult>> {
     if (!query || query.trim().length < 2) return [];
     try {
         const res = await yahooFinance.search(query);
@@ -250,7 +251,7 @@ export async function searchAssets(
             .map((q) => ({
                 symbol: q.symbol!,
                 name: q.shortname || q.longname || q.symbol!,
-                type: (q.quoteType as string) || "EQUITY",
+                type: q.quoteType! as string,
             }));
     } catch (error) {
         console.error(`Error in searchAssets(${query}):`, error);

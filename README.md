@@ -1,4 +1,5 @@
-![Hold icon](/public/icon.png)
+<img src="/images/icon.png" alt="Hold icon" width="200">
+
 # 📈 Hold - Simple Portfolio Tracker
 
 Hold lets you track your passive investment portfolio as easily as possible - log your BUY orders and let it handle the rest.
@@ -9,14 +10,16 @@ Hold lets you track your passive investment portfolio as easily as possible - lo
 
 ## 🌟 Features
 
-- **Simple** - you log your activity, and Hold does the rest.
-- **Open** - import/export all of your activity in a click to CSV format.
-- **Visually appealing** - Chart for tracking performance over time.
-- **Privacy mode** - hide sensitive data.
-- **Multi-Currency Support** - both transactions and final overview can be done in any currency you choose. Historical rates ensure accurate valuations.
-- **Stock-split aware** - Automatically adjusts holdings based on stock splits.
-- **Dividends aware** - Tracks your dividend payouts.
-- **Multi-user** - OIDC by default, optional demo user for first impression.
+- **Simple & Smart**
+    - **Multi-currency support** - Convert all activity to your desired currency on-the-fly.
+    - **Stock-splits and dividends calculation** - Adjust holdings and valuation automatically.
+    - **Import/export** all of your activity to/from CSV.
+    - **Multi-user support** - OIDC by default, optional demo user for first impression.
+    - **Privacy mode** - hide absolute numbers and keep only percentage changes.
+
+- **Visually appealing**
+    - **Information boxes** present current status.
+    - **Performance chart** shows portfolio progress over time.
 
 ---
 
@@ -37,21 +40,20 @@ The following diagram illustrates how the application components interact:
 ```mermaid
 graph TD
     User([User Browser]) -->|HTTPS| Frontend[Next.js Frontend UI]
-    Frontend -->|Interacts| ClientState[React State / Recharts]
     Frontend -->|API Calls| Backend[Next.js API Routes]
 
     subgraph Backend Services
         Backend -->|Auth Session| NextAuth[NextAuth.js]
-        Backend -->|Queries| Prisma[Prisma ORM]
+        Backend -->|User Queries| Prisma[Prisma ORM]
         Prisma -->|Read/Write| SQLite[(SQLite Database)]
 
-        Backend -->|Fetch Prices| FinanceLib[Finance Helper Lib]
-        FinanceLib -->|Cache Lookup| SQLite
-        FinanceLib -->|Live Quote / Search| YahooFinance[Yahoo Finance API]
-        FinanceLib -->|Rates Lookup| Frankfurter[Frankfurter API]
+        Backend -->|Portfolio Operations| Portfolio[Portfolio Logic]
+        Portfolio -->|Portfolio Queries| Prisma
+        Portfolio -->|Quotes| YahooFinance{{Yahoo Finance API}}
+        Portfolio -->|Exchange Rates| Frankfurter{{Frankfurter API}}
     end
 
-    NextAuth -->|OIDC| ExternalOIDC[OIDC Provider e.g. Google]
+    NextAuth -->|OIDC| ExternalOIDC[OIDC Provider]
 ```
 
 ---
@@ -208,20 +210,8 @@ CSPX.L,BUY,5,102.30,EUR,2026-01-03
 
 ## 🔐 Configuring OIDC (OpenID Connect)
 
-The application supports standard OIDC providers (e.g., Google Identity, Keycloak, Auth0, Okta).
+The application supports standard OIDC providers.
 OIDC is configured through the environment variables.
-
-### Example: Google Identity Setup
-
-1. Create OAuth 2.0 Credentials on the [Google Cloud Console](https://console.cloud.google.com/).
-2. Set the Authorized Redirect URI to: `http://localhost:3000/api/auth/callback/oidc`.
-3. Configure these variables in `.env`:
-    ```env
-    AUTH_OIDC_ISSUER="https://accounts.google.com"
-    AUTH_OIDC_CLIENT_ID="your-google-client-id.apps.googleusercontent.com"
-    AUTH_OIDC_CLIENT_SECRET="your-google-client-secret"
-    AUTH_OIDC_NAME="Google Account"
-    ```
 
 ### Example: authentik Identity Setup
 

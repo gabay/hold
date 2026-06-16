@@ -1,10 +1,11 @@
-import NextAuth from "next-auth";
-import { PrismaAdapter } from "@auth/prisma-adapter";
-import Credentials from "next-auth/providers/credentials";
 import { db } from "@/lib/db";
+import { PrismaAdapter } from "@auth/prisma-adapter";
+import NextAuth from "next-auth";
+import { Provider } from "next-auth/providers";
+import Credentials from "next-auth/providers/credentials";
 
 // Construct providers array dynamically
-const providers: any[] = [];
+const providers: Provider[] = [];
 
 if (process.env.ALLOW_DEMO_LOGIN === "true") {
     providers.push(

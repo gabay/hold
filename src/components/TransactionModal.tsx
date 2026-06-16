@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
-import { getDateString } from "@/lib/util";
+import { getDate, getDateString } from "@/lib/util";
 import { Transaction } from "@prisma/client";
 import { SearchAssetResult } from "@/lib/finance";
 
@@ -22,12 +22,14 @@ export default function TransactionModal({
     editingTransaction,
     onSuccess,
 }: TransactionModalProps) {
-    const [formSymbol, setFormSymbol] = useState("");
-    const [formType, setFormType] = useState<string>("BUY");
-    const [formQuantity, setFormQuantity] = useState("");
-    const [formPrice, setFormPrice] = useState("");
-    const [formCurrency, setFormCurrency] = useState("");
-    const [formDate, setFormDate] = useState(getDateString(new Date()));
+    const [formSymbol, setFormSymbol] = useState(editingTransaction?.symbol || "");
+    const [formType, setFormType] = useState(editingTransaction?.type || "BUY");
+    const [formQuantity, setFormQuantity] = useState(editingTransaction?.quantity.toString() || "");
+    const [formPrice, setFormPrice] = useState(editingTransaction?.pricePerShare.toString() || "");
+    const [formCurrency, setFormCurrency] = useState(editingTransaction?.currency || "");
+    const [formDate, setFormDate] = useState(
+        getDateString(editingTransaction?.transactionDate || getDate()),
+    );
     const [formSubmitting, setFormSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -38,35 +40,24 @@ export default function TransactionModal({
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const symbolInputRef = useRef<HTMLInputElement>(null);
 
-    // Initialize form when editingTransaction changes or modal opens
-    useEffect(() => {
+    // Reset form data on open.
+    const [prevIsOpen, setPrevIsOpen] = useState(false);
+    if (isOpen !== prevIsOpen) {
+        setPrevIsOpen(isOpen);
         if (isOpen) {
-            if (editingTransaction) {
-                setFormSymbol(editingTransaction.symbol);
-                setFormType(editingTransaction.type);
-                setFormQuantity(editingTransaction.quantity.toString());
-                setFormPrice(editingTransaction.pricePerShare.toString());
-                setFormCurrency(editingTransaction.currency || "");
-                setFormDate(getDateString(new Date(editingTransaction.transactionDate)));
-            } else {
-                setFormSymbol("");
-                setFormType("BUY");
-                setFormQuantity("");
-                setFormPrice("");
-                setFormCurrency("");
-                setFormDate(getDateString(new Date()));
-            }
-            setError(null);
+            setFormSymbol(editingTransaction?.symbol || "");
+            setFormType(editingTransaction?.type || "BUY");
+            setFormQuantity(editingTransaction?.quantity.toString() || "");
+            setFormPrice(editingTransaction?.pricePerShare.toString() || "");
+            setFormCurrency(editingTransaction?.currency || "");
+            setFormDate(getDateString(editingTransaction?.transactionDate || getDate()));
         }
-    }, [editingTransaction, isOpen]);
+    }
 
     // Focus on mount
     useEffect(() => {
         if (isOpen) {
-            const timer = setTimeout(() => {
-                symbolInputRef.current?.focus();
-            }, 50);
-            return () => clearTimeout(timer);
+            symbolInputRef.current?.focus();
         }
     }, [isOpen]);
 
@@ -94,9 +85,9 @@ export default function TransactionModal({
             return;
         }
 
-        setSearching(true);
+        setSuggestions([]);
         setShowSuggestions(true);
-
+        setSearching(true);
         searchTimeoutRef.current = setTimeout(async () => {
             try {
                 const res = await fetch(`/api/finance/search?q=${encodeURIComponent(value)}`);
@@ -112,36 +103,10 @@ export default function TransactionModal({
         }, 400);
     };
 
-    const handleCurrencyChange = (val: string) => {
-        const uppercaseVal = val.toUpperCase();
-        setFormCurrency(uppercaseVal);
-
-        const normalized = uppercaseVal.trim();
-        if (normalized.length === 0) {
-            setError(null);
-        } else if (normalized.length === 3) {
-            if (!SUPPORTED_CURRENCIES[normalized]) {
-                setError(`Unsupported currency "${uppercaseVal}".`);
-            } else {
-                setError(null);
-            }
-        } else if (normalized.length > 3) {
-            setError(`Unsupported currency "${uppercaseVal}".`);
-        }
-    };
-
-    const handleCurrencyBlur = () => {
-        const normalized = formCurrency.trim().toUpperCase();
-        if (normalized && !SUPPORTED_CURRENCIES[normalized]) {
-            setError(`Unsupported currency "${formCurrency}".`);
-        }
-    };
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        const normalizedCurrency = formCurrency.trim().toUpperCase();
-        if (normalizedCurrency && !SUPPORTED_CURRENCIES[normalizedCurrency]) {
+        if (formCurrency && !SUPPORTED_CURRENCIES[formCurrency]) {
             setError(
                 `Unsupported currency "${formCurrency}". Please use a standard currency code.`,
             );
@@ -152,7 +117,7 @@ export default function TransactionModal({
         setError(null);
 
         const url = editingTransaction
-            ? `/api/transactions/${editingTransaction.id}`
+            ? `/api/portfolio/${portfolioId}/transactions/${editingTransaction.id}`
             : `/api/portfolio/${portfolioId}/transactions`;
         const method = editingTransaction ? "PUT" : "POST";
 
@@ -165,7 +130,7 @@ export default function TransactionModal({
                     type: formType,
                     quantity: parseFloat(formQuantity),
                     pricePerShare: parseFloat(formPrice),
-                    currency: formCurrency || null,
+                    currency: formCurrency,
                     transactionDate: new Date(formDate).toISOString(),
                 }),
             });
@@ -217,69 +182,66 @@ export default function TransactionModal({
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="relative">
-                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                            Ticker Symbol
-                        </label>
-                        <input
-                            ref={symbolInputRef}
-                            type="text"
-                            required
-                            placeholder="e.g. AAPL, VWCE.DE"
-                            value={formSymbol}
-                            onChange={(e) => handleSymbolChange(e.target.value)}
-                            onFocus={() => {
-                                if (formSymbol.trim().length >= 2) setShowSuggestions(true);
-                            }}
-                            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                            className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
-                            autoComplete="off"
-                        />
-
-                        {showSuggestions && (
-                            <div className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950 p-1 shadow-2xl">
-                                {searching && suggestions.length === 0 ? (
-                                    <div className="flex items-center justify-center p-3 text-xs text-slate-500">
-                                        <Loader2 className="h-4 w-4 animate-spin mr-2" />{" "}
-                                        Searching...
-                                    </div>
-                                ) : suggestions.length > 0 ? (
-                                    <div className="divide-y divide-slate-900">
-                                        {suggestions.map((item) => (
-                                            <button
-                                                key={item.symbol}
-                                                type="button"
-                                                onClick={() => {
-                                                    setFormSymbol(item.symbol);
-                                                    setShowSuggestions(false);
-                                                    setSuggestions([]);
-                                                }}
-                                                className="flex w-full flex-col text-left px-3 py-2 text-xs hover:bg-slate-900 transition-all rounded-lg"
-                                            >
-                                                <div className="flex justify-between items-center w-full">
-                                                    <span className="font-bold text-white">
-                                                        {item.symbol}
-                                                    </span>
-                                                    <span className="px-1.5 py-0.2 rounded text-[10px] font-bold uppercase bg-slate-900 text-slate-400">
-                                                        {item.type}
-                                                    </span>
-                                                </div>
-                                                <span className="text-[11px] text-slate-400 truncate w-full mt-0.5">
-                                                    {item.name}
-                                                </span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                ) : !searching && formSymbol.trim().length >= 2 ? (
-                                    <div className="p-3 text-center text-xs text-slate-500">
-                                        No results found
-                                    </div>
-                                ) : null}
-                            </div>
-                        )}
-                    </div>
-
                     <div className="grid grid-cols-2 gap-4">
+                        <div className="relative">
+                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
+                                Ticker Symbol
+                            </label>
+                            <input
+                                ref={symbolInputRef}
+                                type="text"
+                                required
+                                placeholder="e.g. AAPL, VWCE.DE"
+                                value={formSymbol}
+                                onChange={(e) => handleSymbolChange(e.target.value)}
+                                onBlur={() => setShowSuggestions(false)}
+                                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
+                                autoComplete="off"
+                            />
+
+                            {showSuggestions && (
+                                <div className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950 p-1 shadow-2xl">
+                                    {searching && suggestions.length === 0 ? (
+                                        <div className="flex items-center justify-center p-3 text-xs text-slate-500">
+                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />{" "}
+                                            Searching...
+                                        </div>
+                                    ) : suggestions.length > 0 ? (
+                                        <div className="divide-y divide-slate-900">
+                                            {suggestions.map((item) => (
+                                                <button
+                                                    key={item.symbol}
+                                                    type="button"
+                                                    tabIndex={-1}
+                                                    onMouseDown={() => {
+                                                        setFormSymbol(item.symbol);
+                                                        setShowSuggestions(false);
+                                                        setSuggestions([]);
+                                                    }}
+                                                    className="flex w-full flex-col text-left px-3 py-2 text-xs hover:bg-slate-900 transition-all rounded-lg"
+                                                >
+                                                    <div className="flex justify-between items-center w-full">
+                                                        <span className="font-bold text-white">
+                                                            {item.symbol}
+                                                        </span>
+                                                        <span className="px-1.5 py-0.2 rounded text-[10px] font-bold uppercase bg-slate-900 text-slate-400">
+                                                            {item.type}
+                                                        </span>
+                                                    </div>
+                                                    <span className="text-[11px] text-slate-400 truncate w-full mt-0.5">
+                                                        {item.name}
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    ) : !searching && formSymbol.trim().length >= 2 ? (
+                                        <div className="p-3 text-center text-xs text-slate-500">
+                                            No results found
+                                        </div>
+                                    ) : null}
+                                </div>
+                            )}
+                        </div>
                         <div>
                             <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
                                 Type
@@ -293,7 +255,9 @@ export default function TransactionModal({
                                 <option value="SELL">SELL</option>
                             </select>
                         </div>
+                    </div>
 
+                    <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
                                 Quantity
@@ -308,9 +272,7 @@ export default function TransactionModal({
                                 className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
                             />
                         </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
                                 Price Per Share
@@ -325,7 +287,9 @@ export default function TransactionModal({
                                 className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
                             />
                         </div>
+                    </div>
 
+                    <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
                                 Currency
@@ -334,24 +298,38 @@ export default function TransactionModal({
                                 type="text"
                                 placeholder="e.g. USD (optional)"
                                 value={formCurrency}
-                                onChange={(e) => handleCurrencyChange(e.target.value)}
-                                onBlur={handleCurrencyBlur}
+                                onChange={(e) => {
+                                    const currency = e.target.value.toUpperCase().trim();
+                                    setFormCurrency(currency);
+                                    setError(
+                                        currency.length < 3 || SUPPORTED_CURRENCIES[currency]
+                                            ? null
+                                            : `Unsupported currency "${currency}".`,
+                                    );
+                                }}
+                                onBlur={() =>
+                                    setError(
+                                        !formCurrency || SUPPORTED_CURRENCIES[formCurrency]
+                                            ? null
+                                            : `Unsupported currency "${formCurrency}".`,
+                                    )
+                                }
                                 className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
                             />
                         </div>
-                    </div>
 
-                    <div>
-                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                            Date
-                        </label>
-                        <input
-                            type="date"
-                            required
-                            value={formDate}
-                            onChange={(e) => setFormDate(e.target.value)}
-                            className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
-                        />
+                        <div>
+                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
+                                Date
+                            </label>
+                            <input
+                                type="date"
+                                required
+                                value={formDate}
+                                onChange={(e) => setFormDate(e.target.value)}
+                                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
+                            />
+                        </div>
                     </div>
 
                     <button

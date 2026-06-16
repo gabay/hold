@@ -2,7 +2,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
     const session = await auth();
     if (!session || !session.user?.id) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -19,7 +19,6 @@ export async function GET(req: NextRequest) {
         const defaultPortfolio = await db.portfolio.create({
             data: {
                 name: "My Portfolio",
-                baseCurrency: "USD",
                 userId,
             },
         });
@@ -39,7 +38,7 @@ export async function POST(req: NextRequest) {
 
     try {
         const body = await req.json();
-        const { name, baseCurrency } = body;
+        const { name } = body;
 
         if (!name) {
             return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -48,13 +47,12 @@ export async function POST(req: NextRequest) {
         const portfolio = await db.portfolio.create({
             data: {
                 name,
-                baseCurrency: baseCurrency || "USD",
                 userId,
             },
         });
 
         return NextResponse.json(portfolio, { status: 201 });
-    } catch (error) {
+    } catch (_e) {
         return NextResponse.json({ error: "Invalid request payload" }, { status: 400 });
     }
 }

@@ -6,7 +6,7 @@ import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
 
 interface CurrencySearchBoxProps {
     value: string;
-    onChange: (currency: string) => void;
+    onChange: (_currency: string) => void;
 }
 
 export default function CurrencySearchBox({ value, onChange }: CurrencySearchBoxProps) {

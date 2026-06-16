@@ -66,7 +66,6 @@ model VerificationToken {
 model Portfolio {
     id           String        @id @default(cuid())
     name         String
-    baseCurrency String        @default("USD") // "USD", "EUR", etc.
     userId       String
     user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
     transactions Transaction[]
@@ -86,26 +85,4 @@ model Transaction {
     transactionDate DateTime  @default(now())
     createdAt       DateTime  @default(now())
     updatedAt       DateTime  @updatedAt
-}
-
-model AssetPriceCache {
-    id        String   @id @default(cuid())
-    symbol    String
-    date      DateTime // Close date
-    price     Float // Close price in asset currency
-    currency  String // e.g. "USD", "EUR"
-    createdAt DateTime @default(now())
-
-    @@unique([symbol, date])
-}
-
-model ExchangeRateCache {
-    id           String   @id @default(cuid())
-    fromCurrency String
-    toCurrency   String
-    date         DateTime
-    rate         Float
-    createdAt    DateTime @default(now())
-
-    @@unique([fromCurrency, toCurrency, date])
 }

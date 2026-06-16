@@ -1,38 +1,49 @@
 "use client";
 
-import { useSession, signIn, signOut } from "next-auth/react";
-import { useEffect, useState, useRef } from "react";
 import CurrencySearchBox from "@/components/CurrencySearchBox";
 import TransactionModal from "@/components/TransactionModal";
 import {
-    LineChart,
-    Line,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    ResponsiveContainer,
-    Legend,
-    Brush,
-} from "recharts";
-import {
-    Plus,
-    LogOut,
-    TrendingUp,
-    TrendingDown,
     DollarSign,
-    Wallet,
-    Percent,
     Download,
-    Upload,
-    Loader2,
     Eye,
     EyeOff,
+    HandCoins,
+    Loader2,
+    LogOut,
+    Percent,
+    Plus,
     Trash,
+    TrendingDown,
+    TrendingUp,
+    Upload,
+    Wallet,
 } from "lucide-react";
+import { signIn, signOut, useSession } from "next-auth/react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+    Brush,
+    CartesianGrid,
+    Legend,
+    Line,
+    LineChart,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis,
+} from "recharts";
 
 import { ChartDataPoint, PortfolioData, PortfolioSummary } from "@/lib/portfolio";
+import { getDate } from "@/lib/util";
 import { Transaction } from "@prisma/client";
+import { Provider } from "next-auth/providers";
+import SummaryCard from "@/components/SummaryCard";
+
+function localStorageGet(key: string): string | null {
+    if (typeof localStorage !== "undefined") {
+        return localStorage.getItem(key);
+    }
+    return null;
+}
 
 export default function Dashboard() {
     const { data: session, status } = useSession();
@@ -41,42 +52,26 @@ export default function Dashboard() {
     const [summary, setSummary] = useState<PortfolioSummary | null>(null);
     const [history, setHistory] = useState<ChartDataPoint[]>([]);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
-    const [displayCurrency, setDisplayCurrency] = useState("USD");
-    const [timeRange, setTimeRange] = useState("30"); // "30" | "ytd" | "365" | "1825" | "max"
+    const [displayCurrency, setDisplayCurrency] = useState(
+        () => localStorageGet("portfolio_displayCurrency") || "USD",
+    );
+    const [timeRange, setTimeRange] = useState(
+        () => localStorageGet("portfolio_timeRange") || "30",
+    ); // "30" | "ytd" | "365" | "1825" | "max"
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [activeProviders, setActiveProviders] = useState<Record<string, object> | null>(null);
+    const [activeProviders, setActiveProviders] = useState<Record<string, Provider> | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
-    const [privacyMode, setPrivacyMode] = useState(false);
+    const [privacyMode, setPrivacyMode] = useState(
+        () => localStorageGet("portfolio_privacyMode") === "true",
+    );
     const privacyModeText = "••••••";
-
-    useEffect(() => {
-        const saved = localStorage.getItem("portfolio_privacyMode");
-        if (saved) {
-            setPrivacyMode(saved === "true");
-        }
-        const savedCurrency = localStorage.getItem("portfolio_displayCurrency");
-        if (savedCurrency) {
-            setDisplayCurrency(savedCurrency);
-        }
-    }, []);
-
-    const togglePrivacy = () => {
-        const newMode = !privacyMode;
-        setPrivacyMode(newMode);
-        localStorage.setItem("portfolio_privacyMode", String(newMode));
+    const hideInPrivacyMode = (value: string | number): string => {
+        return privacyMode ? privacyModeText : value.toString();
     };
 
-    // Transaction Form state
-    const [showAddForm, setShowAddForm] = useState(false);
-    const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
-
-    // Import CSV state
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [importing, setImporting] = useState(false);
-
-    // Load portfolios
     useEffect(() => {
+        // Authenticated - load portfolios
         if (status === "authenticated") {
             fetch("/api/portfolio")
                 .then((res) => {
@@ -95,10 +90,8 @@ export default function Dashboard() {
                     setError(err.message);
                 });
         }
-    }, [status]);
 
-    // Load active providers when unauthenticated
-    useEffect(() => {
+        // Unauthenticated - load active providers
         if (status === "unauthenticated") {
             fetch("/api/auth/providers")
                 .then((res) => {
@@ -114,8 +107,21 @@ export default function Dashboard() {
         }
     }, [status]);
 
-    // Load summary, history, and transactions
-    useEffect(() => {
+    const togglePrivacy = () => {
+        const newMode = !privacyMode;
+        setPrivacyMode(newMode);
+        localStorage.setItem("portfolio_privacyMode", String(newMode));
+    };
+
+    // Transaction Form state
+    const [showAddForm, setShowAddForm] = useState(false);
+    const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+
+    // Import CSV state
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [importing, setImporting] = useState(false);
+
+    const fetchPortfolioData = useCallback(() => {
         if (portfolio?.id) {
             setLoading(true);
             setError(null);
@@ -127,43 +133,27 @@ export default function Dashboard() {
                 },
             )
                 .then((res) => {
-                    if (!res.ok) throw new Error("Failed to fetch performance data");
+                    if (!res.ok) throw new Error("Failed to fetch portfolio data");
                     return res.json();
                 })
                 .then((pd: PortfolioData) => {
                     setSummary(pd.summary);
                     setHistory(pd.history);
                     setTransactions(pd.transactions);
-                    setLoading(false);
                 })
                 .catch((err) => {
                     setError(err.message);
+                })
+                .finally(() => {
                     setLoading(false);
                 });
         }
     }, [portfolio, displayCurrency, timeRange]);
 
-    const refreshData = () => {
-        if (portfolio?.id) {
-            fetch(
-                `/api/portfolio/${portfolio.id}/data?currency=${displayCurrency}&days=${timeRange}`,
-                {
-                    cache: "no-store",
-                },
-            )
-                .then((res) => res.json())
-                .then((pd: PortfolioData) => {
-                    setSummary(pd.summary);
-                    setHistory(pd.history);
-                    setTransactions(pd.transactions);
-                    setLoading(false);
-                })
-                .catch((err) => {
-                    setError(err.message);
-                    setLoading(false);
-                });
-        }
-    };
+    useEffect(() => {
+        const timeout = setTimeout(fetchPortfolioData, 0);
+        return () => clearTimeout(timeout);
+    }, [fetchPortfolioData]);
 
     const startEditTransaction = (tx: Transaction) => {
         setEditingTransaction(tx);
@@ -176,12 +166,12 @@ export default function Dashboard() {
 
         setError(null);
         try {
-            const res = await fetch(`/api/transactions/${txId}`, {
+            const res = await fetch(`/api/portfolio/${portfolio?.id}/transactions/${txId}`, {
                 method: "DELETE",
             });
             if (!res.ok) throw new Error("Failed to delete transaction");
 
-            refreshData();
+            fetchPortfolioData();
         } catch (err: unknown) {
             setError((err as Error).message);
         }
@@ -218,7 +208,7 @@ export default function Dashboard() {
             setTimeout(() => {
                 setSuccessMessage(null);
             }, 3000);
-            refreshData();
+            fetchPortfolioData();
         } catch (err: unknown) {
             setError((err as Error).message);
         } finally {
@@ -247,7 +237,7 @@ export default function Dashboard() {
             setTimeout(() => {
                 setSuccessMessage(null);
             }, 3000);
-            refreshData();
+            fetchPortfolioData();
         } catch (err: unknown) {
             setError((err as Error).message);
         } finally {
@@ -258,7 +248,7 @@ export default function Dashboard() {
     // Format currency helpers
     const formatCurrency = (val: number, currency: string) => {
         try {
-            return new Intl.NumberFormat(undefined, {
+            return new Intl.NumberFormat("en-US", {
                 style: "currency",
                 currency: currency,
                 minimumFractionDigits: 2,
@@ -270,22 +260,23 @@ export default function Dashboard() {
         }
     };
 
-    const fmt = (val: number) => formatCurrency(val, displayCurrency);
+    const formatDisplayCurrency = (val: number) => formatCurrency(val, displayCurrency);
 
     const formatDate = (dateVal: string | Date) => {
         if (!dateVal) return "";
-        const d = new Date(dateVal);
-        const day = String(d.getDate()).padStart(2, "0");
-        const month = String(d.getMonth() + 1).padStart(2, "0");
-        const year = d.getFullYear();
+        const d = getDate(dateVal);
+        const day = String(d.getUTCDate()).padStart(2, "0");
+        const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+        const year = d.getUTCFullYear();
         return `${day}-${month}-${year}`;
     };
 
-    const chartData = history.map((d) => ({
-        ...d,
-        percentReturn:
-            d.invested > 0 ? ((d.valuation + d.realized - d.invested) / d.invested) * 100 : 0,
-    }));
+    const chartData =
+        history?.map((d) => ({
+            ...d,
+            percentReturn:
+                d.invested > 0 ? ((d.valuation + d.realized - d.invested) / d.invested) * 100 : 0,
+        })) || [];
 
     if (status === "loading") {
         return (
@@ -301,11 +292,13 @@ export default function Dashboard() {
             <div className="flex min-h-screen flex-col items-center justify-center px-4 py-12 sm:px-6 lg:px-8 bg-slate-950 text-slate-100">
                 <div className="w-full max-w-md space-y-8 bg-slate-900/60 backdrop-blur-md p-8 rounded-2xl shadow-xl border border-slate-800">
                     <div className="text-center flex flex-col items-center">
-                        <img
-                            src="/icon.png"
-                            alt="Hold Logo"
-                            className="h-16 w-16 rounded-2xl shadow-lg border border-slate-800"
-                        />
+                        <picture>
+                            <img
+                                src="/icon.png"
+                                alt="Hold Logo"
+                                className="h-16 w-16 rounded-2xl shadow-lg border border-slate-800"
+                            />
+                        </picture>
                         <h2 className="mt-4 text-3xl font-extrabold tracking-tight bg-linear-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
                             Hold
                         </h2>
@@ -371,11 +364,13 @@ export default function Dashboard() {
                 <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                     <div className="flex h-16 items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <img
-                                src="/icon.png"
-                                alt="Hold Logo"
-                                className="h-7 w-7 rounded-lg shadow-md border border-slate-800"
-                            />
+                            <picture>
+                                <img
+                                    src="/icon.png"
+                                    alt="Hold Logo"
+                                    className="h-7 w-7 rounded-lg shadow-md border border-slate-800"
+                                />
+                            </picture>
                             <span className="text-xl font-bold bg-linear-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
                                 Hold
                             </span>
@@ -444,8 +439,8 @@ export default function Dashboard() {
 
                 {/* Dashboard Overview Cards */}
                 {loading ? (
-                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-                        {[...Array(3)].map((_, i) => (
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-4">
+                        {[...Array(4)].map((_, i) => (
                             <div
                                 key={i}
                                 className="h-32 animate-pulse rounded-2xl bg-slate-900 border border-slate-850"
@@ -454,77 +449,70 @@ export default function Dashboard() {
                     </div>
                 ) : (
                     summary && (
-                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-                            {/* Card 1: Total Valuation */}
-                            <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 shadow-md flex items-center justify-between">
-                                <div className="space-y-1">
-                                    <p className="text-sm font-medium text-slate-400">
-                                        Current Valuation
-                                    </p>
-                                    <p className="text-3xl font-bold tracking-tight text-white">
-                                        {privacyMode ? privacyModeText : fmt(summary.totalValue)}
-                                    </p>
-                                </div>
-                                <div className="rounded-xl bg-sky-950/40 text-sky-400 border border-sky-900/30 p-3">
-                                    <Wallet className="h-6 w-6" />
-                                </div>
-                            </div>
+                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-4">
+                            {/* Card 1: Invested Capital */}
+                            <SummaryCard
+                                title="Invested Capital (Cost)"
+                                content={hideInPrivacyMode(
+                                    formatDisplayCurrency(summary.totalCost),
+                                )}
+                                color="indigo"
+                                icon={<Wallet className="h-6 w-6" />}
+                            />
 
-                            {/* Card 2: Cost Basis */}
-                            <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 shadow-md flex items-center justify-between">
-                                <div className="space-y-1">
-                                    <p className="text-sm font-medium text-slate-400">
-                                        Invested Capital (Cost)
-                                    </p>
-                                    <p className="text-3xl font-bold tracking-tight text-white">
-                                        {privacyMode ? privacyModeText : fmt(summary.totalCost)}
-                                    </p>
-                                </div>
-                                <div className="rounded-xl bg-indigo-950/40 text-indigo-400 border border-indigo-900/30 p-3">
-                                    <DollarSign className="h-6 w-6" />
-                                </div>
-                            </div>
+                            {/* Card 2: Current Valuation */}
+                            <SummaryCard
+                                title="Current Valuation"
+                                content={hideInPrivacyMode(
+                                    formatDisplayCurrency(summary.totalValue),
+                                )}
+                                color="sky"
+                                icon={<DollarSign className="h-6 w-6" />}
+                            />
 
-                            {/* Card 3: Total Profit/Loss */}
-                            <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 shadow-md flex items-center justify-between">
-                                <div className="space-y-1">
-                                    <p className="text-sm font-medium text-slate-400">
-                                        Total Profit / Loss
+                            {/* Card 3: Realized Profits */}
+                            <SummaryCard
+                                title="Realized Profits"
+                                content={hideInPrivacyMode(
+                                    formatDisplayCurrency(summary.totalRealized),
+                                )}
+                                color="teal"
+                                icon={<HandCoins className="h-6 w-6" />}
+                            />
+
+                            {/* Card 4: Total Profit/Loss */}
+                            <SummaryCard
+                                title="Total Profit / Loss"
+                                content=<div className="flex items-baseline gap-2">
+                                    <p
+                                        className={`text-3xl font-bold tracking-tight ${summary.totalProfit >= 0 ? "text-emerald-400" : "text-rose-400"}`}
+                                    >
+                                        {hideInPrivacyMode(
+                                            formatDisplayCurrency(summary.totalProfit),
+                                        )}
                                     </p>
-                                    <div className="flex items-baseline gap-2">
-                                        <p
-                                            className={`text-3xl font-bold tracking-tight ${summary.totalProfit >= 0 ? "text-emerald-400" : "text-rose-400"}`}
-                                        >
-                                            {privacyMode
-                                                ? privacyModeText
-                                                : fmt(summary.totalProfit)}
-                                        </p>
-                                        <span
-                                            className={`text-sm font-semibold flex items-center gap-0.5 ${summary.totalProfit >= 0 ? "text-emerald-400" : "text-rose-400"}`}
-                                        >
-                                            {summary.totalProfit >= 0 ? (
-                                                <TrendingUp className="h-4.5 w-4.5" />
-                                            ) : (
-                                                <TrendingDown className="h-4.5 w-4.5" />
-                                            )}
-                                            {summary.totalProfitPercentage.toFixed(2)}%
-                                        </span>
-                                    </div>
+                                    <span
+                                        className={`text-sm font-semibold flex items-center gap-0.5 ${summary.totalProfit >= 0 ? "text-emerald-400" : "text-rose-400"}`}
+                                    >
+                                        {summary.totalProfit >= 0 ? (
+                                            <TrendingUp className="h-4.5 w-4.5" />
+                                        ) : (
+                                            <TrendingDown className="h-4.5 w-4.5" />
+                                        )}
+                                        {summary.totalProfitPercentage.toFixed(2)}%
+                                    </span>
                                 </div>
-                                <div
-                                    className={`rounded-xl p-3 border ${summary.totalProfit >= 0 ? "bg-emerald-950/40 text-emerald-400 border-emerald-900/30" : "bg-rose-950/40 text-rose-400 border-rose-900/30"}`}
-                                >
-                                    <Percent className="h-6 w-6" />
-                                </div>
-                            </div>
+                                color={summary.totalProfit >= 0 ? "emerald" : "rose"}
+                                icon=<Percent className="h-6 w-6" />
+                            />
                         </div>
                     )
                 )}
 
                 {/* Charts & Actions Section */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                     {/* Performance line chart */}
-                    <div className="lg:col-span-2 rounded-2xl border border-slate-800 bg-slate-900/40 p-6 shadow-md flex flex-col justify-between h-100">
+                    <div className="lg:col-span-3 rounded-2xl border border-slate-800 bg-slate-900/40 p-6 shadow-md flex flex-col justify-between min-h-100 max-h-fit">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
                             <h3 className="text-lg font-bold text-slate-100">Valuation History</h3>
                             <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
@@ -607,7 +595,7 @@ export default function Dashboard() {
                                         />
                                         <YAxis
                                             tickFormatter={(val) =>
-                                                privacyMode ? `${val}%` : fmt(val)
+                                                privacyMode ? `${val}%` : formatDisplayCurrency(val)
                                             }
                                             tickLine={false}
                                             axisLine={false}
@@ -619,9 +607,9 @@ export default function Dashboard() {
                                             formatter={(value: unknown, name: unknown) => {
                                                 if (privacyMode && name === "Return")
                                                     return `${Number(value).toFixed(2)}%`;
-                                                return privacyMode
-                                                    ? privacyModeText
-                                                    : fmt(value as number);
+                                                return hideInPrivacyMode(
+                                                    formatDisplayCurrency(value as number),
+                                                );
                                             }}
                                             contentStyle={{
                                                 background: "#0f172a",
@@ -665,7 +653,7 @@ export default function Dashboard() {
                                                     type="monotone"
                                                     dataKey="realized"
                                                     name="Realized Profit"
-                                                    stroke="#50c878"
+                                                    stroke="teal"
                                                     strokeWidth={3}
                                                     dot={false}
                                                 />
@@ -708,7 +696,7 @@ export default function Dashboard() {
                                 onClick={handleExportCSV}
                                 className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-300 hover:bg-slate-850 hover:text-white transition-all"
                             >
-                                <Download className="h-4 w-4" /> Export Transactions (CSV)
+                                <Download className="h-4 w-4" /> Export Transactions
                             </button>
 
                             <label className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-300 hover:bg-slate-850 hover:text-white transition-all cursor-pointer">
@@ -719,7 +707,7 @@ export default function Dashboard() {
                                     </>
                                 ) : (
                                     <>
-                                        <Upload className="h-4 w-4" /> Import Transactions (CSV)
+                                        <Upload className="h-4 w-4" /> Import Transactions
                                     </>
                                 )}
                                 <input
@@ -736,7 +724,7 @@ export default function Dashboard() {
                                 type="button"
                                 onClick={handleClearTransactions}
                                 disabled={clearing}
-                                className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-900 bg-rose-950/25 px-4 py-3 text-sm font-semibold text-rose-455 hover:bg-rose-950/40 text-rose-400 transition-all disabled:opacity-50"
+                                className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-900 bg-rose-950/25 px-4 py-3 text-sm font-semibold text-rose-400 hover:bg-rose-950/40 transition-all disabled:opacity-50"
                             >
                                 {clearing ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -775,7 +763,7 @@ export default function Dashboard() {
                     }}
                     portfolioId={portfolio?.id || ""}
                     editingTransaction={editingTransaction}
-                    onSuccess={refreshData}
+                    onSuccess={fetchPortfolioData}
                 />
 
                 {/* Holdings Table */}
@@ -806,8 +794,11 @@ export default function Dashboard() {
                                         <th className="pb-3 px-4">
                                             Market Value ({displayCurrency})
                                         </th>
+                                        <th className="pb-3 px-4">
+                                            Realized ({displayCurrency})
+                                        </th>
                                         <th className="pb-3 pl-4 text-right">
-                                            Return ({displayCurrency})
+                                            Profit / Loss ({displayCurrency})
                                         </th>
                                     </tr>
                                 </thead>
@@ -825,47 +816,56 @@ export default function Dashboard() {
                                                 </div>
                                             </td>
                                             <td className="py-4 px-4">
-                                                {privacyMode ? privacyModeText : asset.quantity}
+                                                {hideInPrivacyMode(asset.quantity)}
                                             </td>
                                             <td className="py-4 px-4">
-                                                {privacyMode
-                                                    ? privacyModeText
-                                                    : formatCurrency(
-                                                          asset.avgBuyPrice,
-                                                          asset.currency,
-                                                      )}
+                                                {hideInPrivacyMode(
+                                                    formatCurrency(
+                                                        asset.avgBuyPrice,
+                                                        asset.currency,
+                                                    ),
+                                                )}
                                             </td>
                                             <td className="py-4 px-4">
-                                                {privacyMode
-                                                    ? privacyModeText
-                                                    : formatCurrency(
-                                                          asset.currentPrice,
-                                                          asset.currency,
-                                                      )}
+                                                {hideInPrivacyMode(
+                                                    formatCurrency(
+                                                        asset.currentPrice,
+                                                        asset.currency,
+                                                    ),
+                                                )}
                                             </td>
                                             <td className="py-4 px-4">
-                                                {privacyMode ? privacyModeText : fmt(asset.cost)}
+                                                {hideInPrivacyMode(
+                                                    formatDisplayCurrency(asset.cost),
+                                                )}
                                             </td>
                                             <td className="py-4 px-4">
-                                                {privacyMode ? privacyModeText : fmt(asset.value)}
+                                                {hideInPrivacyMode(
+                                                    formatDisplayCurrency(asset.value),
+                                                )}
+                                            </td>
+                                            <td className="py-4 px-4">
+                                                {hideInPrivacyMode(
+                                                    formatDisplayCurrency(asset.realized),
+                                                )}
                                             </td>
                                             <td
-                                                className={`py-4 pl-4 text-right ${asset.profit >= 0 ? "text-emerald-450" : "text-rose-455"}`}
+                                                className={`py-4 pl-4 text-right ${asset.profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}
                                             >
                                                 <div className="flex flex-col items-end">
                                                     <span
                                                         className={
                                                             asset.profit >= 0
                                                                 ? "text-emerald-400"
-                                                                : "text-rose-450"
+                                                                : "text-rose-400"
                                                         }
                                                     >
-                                                        {privacyMode
-                                                            ? privacyModeText
-                                                            : `${asset.profit >= 0 ? "+" : ""}${fmt(asset.profit)}`}
+                                                        {hideInPrivacyMode(
+                                                            `${asset.profit >= 0 ? "+" : ""}${formatDisplayCurrency(asset.profit)}`,
+                                                        )}
                                                     </span>
                                                     <span
-                                                        className={`text-xs font-bold ${asset.profit >= 0 ? "text-emerald-400" : "text-rose-450"}`}
+                                                        className={`text-xs font-bold ${asset.profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}
                                                     >
                                                         {asset.profit >= 0 ? "+" : ""}
                                                         {asset.profitPercentage.toFixed(2)}%
@@ -926,26 +926,26 @@ export default function Dashboard() {
                                                 </td>
                                                 <td className="py-4 px-4">
                                                     <span
-                                                        className={`px-2 py-0.5 rounded text-xs font-bold ${tx.type === "BUY" ? "bg-emerald-950 text-emerald-450 border border-emerald-900/30" : "bg-rose-950 text-rose-455 border border-rose-900/30"}`}
+                                                        className={`px-2 py-0.5 rounded text-xs font-bold ${tx.type === "BUY" ? "bg-emerald-950 text-emerald-400 border border-emerald-900/30" : "bg-rose-950 text-rose-400 border border-rose-900/30"}`}
                                                     >
                                                         {tx.type}
                                                     </span>
                                                 </td>
                                                 <td className="py-4 px-4">
-                                                    {privacyMode ? privacyModeText : tx.quantity}
+                                                    {hideInPrivacyMode(tx.quantity)}
                                                 </td>
                                                 <td className="py-4 px-4">
-                                                    {privacyMode
-                                                        ? privacyModeText
-                                                        : formatCurrency(
-                                                              tx.pricePerShare,
-                                                              tx.currency,
-                                                          )}
+                                                    {hideInPrivacyMode(
+                                                        formatCurrency(
+                                                            tx.pricePerShare,
+                                                            tx.currency,
+                                                        ),
+                                                    )}
                                                 </td>
                                                 <td className="py-4 px-4 font-semibold text-white">
-                                                    {privacyMode
-                                                        ? privacyModeText
-                                                        : formatCurrency(totalCost, tx.currency)}
+                                                    {hideInPrivacyMode(
+                                                        formatCurrency(totalCost, tx.currency),
+                                                    )}
                                                 </td>
                                                 <td className="py-4 pl-4 text-right">
                                                     <div className="flex justify-end gap-2">
