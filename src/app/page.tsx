@@ -10,7 +10,6 @@ import {
     HandCoins,
     Loader2,
     LogOut,
-    Percent,
     Plus,
     Trash,
     TrendingDown,
@@ -18,7 +17,7 @@ import {
     Upload,
     Wallet,
 } from "lucide-react";
-import { signIn, signOut, useSession } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
     Brush,
@@ -33,10 +32,10 @@ import {
 } from "recharts";
 
 import { ChartDataPoint, PortfolioData, PortfolioSummary } from "@/lib/portfolio";
-import { getDate } from "@/lib/util";
 import { Transaction } from "@prisma/client";
 import { Provider } from "next-auth/providers";
 import SummaryCard from "@/components/SummaryCard";
+import Login from "@/components/Login";
 
 function localStorageGet(key: string): string | null {
     if (typeof localStorage !== "undefined") {
@@ -262,15 +261,6 @@ export default function Dashboard() {
 
     const formatDisplayCurrency = (val: number) => formatCurrency(val, displayCurrency);
 
-    const formatDate = (dateVal: string | Date) => {
-        if (!dateVal) return "";
-        const d = getDate(dateVal);
-        const day = String(d.getUTCDate()).padStart(2, "0");
-        const month = String(d.getUTCMonth() + 1).padStart(2, "0");
-        const year = d.getUTCFullYear();
-        return `${day}-${month}-${year}`;
-    };
-
     const chartData =
         history?.map((d) => ({
             ...d,
@@ -288,73 +278,7 @@ export default function Dashboard() {
 
     // Not logged in -> Show login UI
     if (status === "unauthenticated" || !session) {
-        return (
-            <div className="flex min-h-screen flex-col items-center justify-center px-4 py-12 sm:px-6 lg:px-8 bg-slate-950 text-slate-100">
-                <div className="w-full max-w-md space-y-8 bg-slate-900/60 backdrop-blur-md p-8 rounded-2xl shadow-xl border border-slate-800">
-                    <div className="text-center flex flex-col items-center">
-                        <picture>
-                            <img
-                                src="/icon.png"
-                                alt="Hold Logo"
-                                className="h-16 w-16 rounded-2xl shadow-lg border border-slate-800"
-                            />
-                        </picture>
-                        <h2 className="mt-4 text-3xl font-extrabold tracking-tight bg-linear-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
-                            Hold
-                        </h2>
-                        <p className="mt-2 text-sm text-slate-400">Simple Portfolio Tracker</p>
-                    </div>
-                    <div className="mt-8 space-y-4">
-                        {!activeProviders && (
-                            <div className="flex justify-center py-4">
-                                <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
-                            </div>
-                        )}
-
-                        {activeProviders && activeProviders.oidc && (
-                            <button
-                                onClick={() => signIn("oidc")}
-                                className="group relative flex w-full justify-center rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white hover:bg-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 transition-all shadow-md shadow-sky-900/20"
-                            >
-                                Sign in with {activeProviders.oidc.name || "OIDC"}
-                            </button>
-                        )}
-
-                        {activeProviders && activeProviders.credentials && (
-                            <>
-                                {activeProviders.oidc && (
-                                    <div className="relative flex py-4 items-center">
-                                        <div className="grow border-t border-slate-800"></div>
-                                        <span className="shrink mx-4 text-slate-500 text-xs uppercase font-medium">
-                                            Or Demo Logins
-                                        </span>
-                                        <div className="grow border-t border-slate-800"></div>
-                                    </div>
-                                )}
-                                <button
-                                    onClick={() =>
-                                        signIn("credentials", {
-                                            email: "test@example.com",
-                                            name: "Demo User",
-                                        })
-                                    }
-                                    className="flex w-full justify-center rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-300 hover:bg-slate-850 hover:text-white focus:outline-none focus:ring-2 focus:ring-slate-700 transition-all"
-                                >
-                                    Access Demo Portfolio
-                                </button>
-                            </>
-                        )}
-
-                        {activeProviders && Object.keys(activeProviders).length === 0 && (
-                            <div className="text-center py-4 text-sm text-slate-400">
-                                No sign-in methods are currently enabled. Please check server
-                                configurations.
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-        );
+        return <Login providers={activeProviders || {}} />;
     }
 
     return (
@@ -453,31 +377,36 @@ export default function Dashboard() {
                             {/* Card 1: Invested Capital */}
                             <SummaryCard
                                 title="Invested Capital (Cost)"
-                                content={hideInPrivacyMode(
-                                    formatDisplayCurrency(summary.totalCost),
-                                )}
-                                color="indigo"
-                                icon={<Wallet className="h-6 w-6" />}
+                                content=<p className="text-3xl font-bold tracking-tight text-white">
+                                    {hideInPrivacyMode(formatDisplayCurrency(summary.totalCost))}
+                                </p>
+                                icon=<div className="rounded-xl p-3 bg-indigo-950/40 text-indigo-400 border border-indigo-900/30">
+                                    <Wallet className="h-6 w-6" />
+                                </div>
                             />
 
                             {/* Card 2: Current Valuation */}
                             <SummaryCard
                                 title="Current Valuation"
-                                content={hideInPrivacyMode(
-                                    formatDisplayCurrency(summary.totalValue),
-                                )}
-                                color="sky"
-                                icon={<DollarSign className="h-6 w-6" />}
+                                content=<p className="text-3xl font-bold tracking-tight text-white">
+                                    {hideInPrivacyMode(formatDisplayCurrency(summary.totalValue))}
+                                </p>
+                                icon=<div className="rounded-xl p-3 bg-sky-950/40 text-sky-400 border border-sky-900/30">
+                                    <DollarSign className="h-6 w-6" />
+                                </div>
                             />
 
-                            {/* Card 3: Realized Profits */}
+                            {/* Card 3: Realized Profit */}
                             <SummaryCard
-                                title="Realized Profits"
-                                content={hideInPrivacyMode(
-                                    formatDisplayCurrency(summary.totalRealized),
-                                )}
-                                color="teal"
-                                icon={<HandCoins className="h-6 w-6" />}
+                                title="Realized Profit"
+                                content=<p className="text-3xl font-bold tracking-tight text-white">
+                                    {hideInPrivacyMode(
+                                        formatDisplayCurrency(summary.totalRealized),
+                                    )}
+                                </p>
+                                icon=<div className="rounded-xl p-3 bg-teal-950/40 text-teal-400 border border-teal-900/30">
+                                    <HandCoins className="h-6 w-6" />
+                                </div>
                             />
 
                             {/* Card 4: Total Profit/Loss */}
@@ -494,16 +423,20 @@ export default function Dashboard() {
                                     <span
                                         className={`text-sm font-semibold flex items-center gap-0.5 ${summary.totalProfit >= 0 ? "text-emerald-400" : "text-rose-400"}`}
                                     >
-                                        {summary.totalProfit >= 0 ? (
-                                            <TrendingUp className="h-4.5 w-4.5" />
-                                        ) : (
-                                            <TrendingDown className="h-4.5 w-4.5" />
-                                        )}
                                         {summary.totalProfitPercentage.toFixed(2)}%
                                     </span>
                                 </div>
-                                color={summary.totalProfit >= 0 ? "emerald" : "rose"}
-                                icon=<Percent className="h-6 w-6" />
+                                icon={
+                                    summary.totalProfit >= 0 ? (
+                                        <div className="rounded-xl p-3 bg-emerald-950/40 text-emerald-400 border border-emerald-900/30">
+                                            <TrendingUp className="h-6 w-6" />
+                                        </div>
+                                    ) : (
+                                        <div className="rounded-xl p-3 bg-rose-950/40 text-rose-400 border border-rose-900/30">
+                                            <TrendingDown className="h-6 w-6" />
+                                        </div>
+                                    )
+                                }
                             />
                         </div>
                     )
@@ -587,11 +520,11 @@ export default function Dashboard() {
                                         />
                                         <XAxis
                                             dataKey="date"
-                                            tickFormatter={(tick) => formatDate(tick)}
                                             tickLine={false}
                                             axisLine={false}
                                             stroke="#64748b"
                                             dy={10}
+                                            angle={10}
                                         />
                                         <YAxis
                                             tickFormatter={(val) =>
@@ -600,10 +533,8 @@ export default function Dashboard() {
                                             tickLine={false}
                                             axisLine={false}
                                             stroke="#64748b"
-                                            dx={-10}
                                         />
                                         <Tooltip
-                                            labelFormatter={(label) => formatDate(label)}
                                             formatter={(value: unknown, name: unknown) => {
                                                 if (privacyMode && name === "Return")
                                                     return `${Number(value).toFixed(2)}%`;
@@ -634,7 +565,7 @@ export default function Dashboard() {
                                                 <Line
                                                     type="monotone"
                                                     dataKey="valuation"
-                                                    name="Total Value"
+                                                    name="Valuation"
                                                     stroke="#0ea5e9"
                                                     strokeWidth={3}
                                                     dot={false}
@@ -661,7 +592,6 @@ export default function Dashboard() {
                                         )}
                                         <Brush
                                             dataKey="date"
-                                            tickFormatter={(tick) => formatDate(tick)}
                                             height={30}
                                             stroke="#1e293b"
                                             fill="#0f172a"
@@ -794,9 +724,7 @@ export default function Dashboard() {
                                         <th className="pb-3 px-4">
                                             Market Value ({displayCurrency})
                                         </th>
-                                        <th className="pb-3 px-4">
-                                            Realized ({displayCurrency})
-                                        </th>
+                                        <th className="pb-3 px-4">Realized ({displayCurrency})</th>
                                         <th className="pb-3 pl-4 text-right">
                                             Profit / Loss ({displayCurrency})
                                         </th>
@@ -918,9 +846,7 @@ export default function Dashboard() {
                                         const totalCost = tx.quantity * tx.pricePerShare;
                                         return (
                                             <tr key={tx.id} className="hover:bg-slate-800/20">
-                                                <td className="py-4 pr-4">
-                                                    {formatDate(tx.transactionDate)}
-                                                </td>
+                                                <td className="py-4 pr-4">{tx.transactionDate}</td>
                                                 <td className="py-4 px-4 font-bold text-white">
                                                     {tx.symbol}
                                                 </td>
