@@ -182,7 +182,7 @@ async function convertTransactionsCurrency(
  * This class preforms some per-computation on initialization to allow efficient calculation of
  * asset quantity, cost, realized profit, and chart data for any date.
  */
-class AssetDataCalculator {
+export class AssetDataCalculator {
     private transactions: Transaction[];
     private assetInfo: AssetInfo;
     private quantityByDate: DateIntValue[] = [];

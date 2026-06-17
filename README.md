@@ -94,7 +94,7 @@ graph TD
 ### Prerequisites
 
 - **Node.js**: `v20.x` or higher
-- **Package Manager**: `pnpm` (recommended) or `npm`
+- **Package Manager**: `pnpm`
 
 ### 1. Installation
 
@@ -229,9 +229,11 @@ OIDC is configured through the environment variables.
 
 ## 🔧 Useful Development Commands
 
-- **Run Linter**: `npm run lint` or `pnpm lint`
+- **Run Linter**: `pnpm lint`
 - **Open Database Studio**: `npx prisma studio` (Visual explorer for your SQLite database)
 - **Generate Prisma Client**: `npx prisma generate` (Run this after making changes to `schema.prisma`)
 - **Create a Database Migration**: `npx prisma migrate dev --name <migration_name>`
+- **Run Tests**: `pnpm test`
+- **Run Tests with coverage**: `pnpm test --coverage`
 
 ---

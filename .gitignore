@@ -3,6 +3,8 @@
 # project-specific
 hold.db*
 .stignore
+scripts/deploy.sh
+scripts/build.sh
 
 # dependencies
 /node_modules

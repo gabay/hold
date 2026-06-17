@@ -36,6 +36,7 @@ import { Transaction } from "@prisma/client";
 import { Provider } from "next-auth/providers";
 import SummaryCard from "@/components/SummaryCard";
 import Login from "@/components/Login";
+import { getDateString } from "@/lib/util";
 
 function localStorageGet(key: string): string | null {
     if (typeof localStorage !== "undefined") {
@@ -412,20 +413,18 @@ export default function Dashboard() {
                             {/* Card 4: Total Profit/Loss */}
                             <SummaryCard
                                 title="Total Profit / Loss"
-                                content=<div className="flex items-baseline gap-2">
+                                content=<>
                                     <p
                                         className={`text-3xl font-bold tracking-tight ${summary.totalProfit >= 0 ? "text-emerald-400" : "text-rose-400"}`}
                                     >
-                                        {hideInPrivacyMode(
-                                            formatDisplayCurrency(summary.totalProfit),
-                                        )}
+                                        {hideInPrivacyMode(formatDisplayCurrency(summary.totalProfit))}
                                     </p>
                                     <span
                                         className={`text-sm font-semibold flex items-center gap-0.5 ${summary.totalProfit >= 0 ? "text-emerald-400" : "text-rose-400"}`}
                                     >
                                         {summary.totalProfitPercentage.toFixed(2)}%
                                     </span>
-                                </div>
+                                </>
                                 icon={
                                     summary.totalProfit >= 0 ? (
                                         <div className="rounded-xl p-3 bg-emerald-950/40 text-emerald-400 border border-emerald-900/30">
@@ -846,7 +845,7 @@ export default function Dashboard() {
                                         const totalCost = tx.quantity * tx.pricePerShare;
                                         return (
                                             <tr key={tx.id} className="hover:bg-slate-800/20">
-                                                <td className="py-4 pr-4">{tx.transactionDate}</td>
+                                                <td className="py-4 pr-4">{getDateString(tx.transactionDate)}</td>
                                                 <td className="py-4 px-4 font-bold text-white">
                                                     {tx.symbol}
                                                 </td>

@@ -1,7 +1,7 @@
 import YahooFinance from "yahoo-finance2";
 const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 import NodeCache from "node-cache";
-const cache = new NodeCache({ stdTTL: 300, checkperiod: 300 });
+export const cache = new NodeCache({ stdTTL: 300, checkperiod: 300 });
 
 import { getDateString as getDateString, getDateInt, DateInt, addDays, getDate } from "./util";
 import { SearchQuoteYahoo } from "yahoo-finance2/modules/search";
