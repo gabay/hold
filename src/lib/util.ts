@@ -13,7 +13,9 @@ export async function parseDays(id: string, days: string): Promise<Date[]> {
             orderBy: { transactionDate: "asc" },
         });
         if (firstTx) {
-            return expandDays(getDate(firstTx.transactionDate), end);
+            const start = getDate(firstTx.transactionDate);
+            start.setDate(start.getDate() - 1);
+            return expandDays(start, end);
         }
     }
     const daysNumber = parseInt(days, 10) || 30;

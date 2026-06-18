@@ -251,8 +251,7 @@ export default function Dashboard() {
             return new Intl.NumberFormat("en-US", {
                 style: "currency",
                 currency: currency,
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
+                maximumSignificantDigits: 4,
             }).format(val);
         } catch (e) {
             console.error(`Error in formatCurrency(${val}, ${currency}):`, e);
@@ -368,7 +367,7 @@ export default function Dashboard() {
                         {[...Array(4)].map((_, i) => (
                             <div
                                 key={i}
-                                className="h-32 animate-pulse rounded-2xl bg-slate-900 border border-slate-850"
+                                className="h-32 animate-pulse rounded-2xl bg-slate-900 border border-slate-800"
                             ></div>
                         ))}
                     </div>
@@ -598,7 +597,7 @@ export default function Dashboard() {
                                     </LineChart>
                                 </ResponsiveContainer>
                             ) : (
-                                <div className="h-full w-full flex items-center justify-center text-slate-550 text-sm">
+                                <div className="h-full w-full flex items-center justify-center text-slate-500 text-sm">
                                     Add transactions to start generating charts.
                                 </div>
                             )}
@@ -623,12 +622,12 @@ export default function Dashboard() {
 
                             <button
                                 onClick={handleExportCSV}
-                                className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-300 hover:bg-slate-850 hover:text-white transition-all"
+                                className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition-all"
                             >
                                 <Download className="h-4 w-4" /> Export Transactions
                             </button>
 
-                            <label className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-300 hover:bg-slate-850 hover:text-white transition-all cursor-pointer">
+                            <label className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition-all cursor-pointer">
                                 {importing ? (
                                     <>
                                         <Loader2 className="h-4 w-4 animate-spin text-slate-400" />{" "}
@@ -653,7 +652,7 @@ export default function Dashboard() {
                                 type="button"
                                 onClick={handleClearTransactions}
                                 disabled={clearing}
-                                className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-900 bg-rose-950/25 px-4 py-3 text-sm font-semibold text-rose-400 hover:bg-rose-950/40 transition-all disabled:opacity-50"
+                                className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-900 bg-rose-950/25 px-4 py-3 text-sm font-semibold text-rose-400 hover:bg-rose-950/50 transition-all disabled:opacity-50"
                             >
                                 {clearing ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -667,19 +666,16 @@ export default function Dashboard() {
 
                         <div className="rounded-xl bg-slate-950 p-4 border border-slate-900">
                             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                                CSV Format details
+                                CSV fields
                             </h4>
-                            <p className="text-xs text-slate-400 leading-normal">
-                                Columns required:{" "}
-                                <code className="bg-slate-900 px-1 rounded">symbol</code>,{" "}
-                                <code className="bg-slate-900 px-1 rounded">type</code> (BUY/SELL),{" "}
-                                <code className="bg-slate-900 px-1 rounded">quantity</code>,{" "}
-                                <code className="bg-slate-900 px-1 rounded">pricePerShare</code>.
-                                <br />
-                                Optional:{" "}
-                                <code className="bg-slate-900 px-1 rounded">currency</code>,{" "}
-                                <code className="bg-slate-900 px-1 rounded">transactionDate</code>.
-                            </p>
+                            <ul className="text-xs text-slate-400 leading-normal">
+                                <li>• <code className="font-bold">symbol</code></li>
+                                <li>• <code className="font-bold">type</code> (BUY/SELL)</li>
+                                <li>• <code className="font-bold">quantity</code></li>
+                                <li>• <code className="font-bold">pricePerShare</code></li>
+                                <li>• <code className="font-bold italic">currency</code> (optional)</li>
+                                <li>• <code className="font-bold italic">transactionDate</code> (optional)</li>
+                            </ul>
                         </div>
                     </div>
                 </div>
@@ -712,7 +708,7 @@ export default function Dashboard() {
                         <div className="overflow-x-auto">
                             <table className="w-full text-left text-sm text-slate-400 border-collapse">
                                 <thead>
-                                    <tr className="border-b border-slate-800 text-xs font-bold uppercase tracking-wider text-slate-500">
+                                    <tr className="border-b border-slate-600 text-xs font-bold uppercase tracking-wider text-slate-500">
                                         <th className="pb-3 pr-4">Symbol</th>
                                         <th className="pb-3 px-4">Shares</th>
                                         <th className="pb-3 px-4">Avg Buy Price</th>
@@ -729,7 +725,7 @@ export default function Dashboard() {
                                         </th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-850 text-slate-200 font-medium">
+                                <tbody className="divide-y divide-slate-800 text-slate-200 font-medium">
                                     {summary.assets.map((asset) => (
                                         <tr key={asset.symbol} className="hover:bg-slate-800/20">
                                             <td className="py-4 pr-4">
@@ -830,7 +826,7 @@ export default function Dashboard() {
                         <div className="overflow-x-auto">
                             <table className="w-full text-left text-sm text-slate-400 border-collapse">
                                 <thead>
-                                    <tr className="border-b border-slate-800 text-xs font-bold uppercase tracking-wider text-slate-550">
+                                    <tr className="border-b border-slate-600 text-xs font-bold uppercase tracking-wider text-slate-500">
                                         <th className="pb-3 pr-4">Date</th>
                                         <th className="pb-3 px-4">Symbol</th>
                                         <th className="pb-3 px-4">Action</th>
@@ -840,7 +836,7 @@ export default function Dashboard() {
                                         <th className="pb-3 pl-4 text-right">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-850 text-slate-200 font-medium">
+                                <tbody className="divide-y divide-slate-800 text-slate-200 font-medium">
                                     {transactions.map((tx) => {
                                         const totalCost = tx.quantity * tx.pricePerShare;
                                         return (
@@ -884,7 +880,7 @@ export default function Dashboard() {
                                                             onClick={() =>
                                                                 handleDeleteTransaction(tx.id)
                                                             }
-                                                            className="text-xs font-semibold text-rose-400 hover:text-rose-350 px-2.5 py-1 bg-rose-950/40 rounded-lg border border-rose-900/30 transition-all"
+                                                            className="text-xs font-semibold text-rose-400 hover:text-rose-300 px-2.5 py-1 bg-rose-950/40 rounded-lg border border-rose-900/30 transition-all"
                                                         >
                                                             Delete
                                                         </button>
