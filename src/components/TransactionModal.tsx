@@ -37,6 +37,7 @@ export default function TransactionModal({
     const [suggestions, setSuggestions] = useState<SearchAssetResult[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [searching, setSearching] = useState(false);
+    const [selectedIndex, setSelectedIndex] = useState(-1);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const symbolInputRef = useRef<HTMLInputElement>(null);
 
@@ -74,6 +75,7 @@ export default function TransactionModal({
 
     const handleSymbolChange = (value: string) => {
         setFormSymbol(value);
+        setSelectedIndex(-1);
 
         if (searchTimeoutRef.current) {
             clearTimeout(searchTimeoutRef.current);
@@ -101,6 +103,38 @@ export default function TransactionModal({
                 setSearching(false);
             }
         }, 400);
+    };
+
+    const selectSuggestion = (symbol: string) => {
+        setFormSymbol(symbol);
+        setShowSuggestions(false);
+        setSuggestions([]);
+        setSelectedIndex(-1);
+    };
+
+    const handleSymbolKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (!showSuggestions) return;
+
+        switch (e.key) {
+            case "ArrowDown":
+                e.preventDefault();
+                setSelectedIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : 0));
+                break;
+            case "ArrowUp":
+                e.preventDefault();
+                setSelectedIndex((prev) => (prev > 0 ? prev - 1 : suggestions.length - 1));
+                break;
+            case "Enter":
+                e.preventDefault();
+                if (selectedIndex >= 0 && suggestions[selectedIndex]) {
+                    selectSuggestion(suggestions[selectedIndex].symbol);
+                }
+                break;
+            case "Escape":
+                e.stopPropagation();
+                setShowSuggestions(false);
+                break;
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -194,13 +228,17 @@ export default function TransactionModal({
                                 placeholder="e.g. AAPL, VWCE.DE"
                                 value={formSymbol}
                                 onChange={(e) => handleSymbolChange(e.target.value)}
+                                onKeyDown={handleSymbolKeyDown}
                                 onBlur={() => setShowSuggestions(false)}
                                 className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
                                 autoComplete="off"
                             />
 
                             {showSuggestions && (
-                                <div className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950 p-1 shadow-2xl">
+                                <div
+                                    className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950 p-1 shadow-2xl"
+                                    onMouseDown={(e) => e.preventDefault()}
+                                >
                                     {searching && suggestions.length === 0 ? (
                                         <div className="flex items-center justify-center p-3 text-xs text-slate-500">
                                             <Loader2 className="h-4 w-4 animate-spin mr-2" />{" "}
@@ -208,17 +246,19 @@ export default function TransactionModal({
                                         </div>
                                     ) : suggestions.length > 0 ? (
                                         <div className="divide-y divide-slate-900">
-                                            {suggestions.map((item) => (
+                                            {suggestions.map((item, index) => (
                                                 <button
                                                     key={item.symbol}
                                                     type="button"
                                                     tabIndex={-1}
-                                                    onMouseDown={() => {
-                                                        setFormSymbol(item.symbol);
-                                                        setShowSuggestions(false);
-                                                        setSuggestions([]);
-                                                    }}
-                                                    className="flex w-full flex-col text-left px-3 py-2 text-xs hover:bg-slate-900 transition-all rounded-lg"
+                                                    onMouseDown={() =>
+                                                        selectSuggestion(item.symbol)
+                                                    }
+                                                    className={`flex w-full flex-col text-left px-3 py-2 text-xs transition-all rounded-lg ${
+                                                        index === selectedIndex
+                                                            ? "bg-slate-800"
+                                                            : "hover:bg-slate-900"
+                                                    }`}
                                                 >
                                                     <div className="flex justify-between items-center w-full">
                                                         <span className="font-bold text-white">
