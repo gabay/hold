@@ -23,6 +23,18 @@ Hold lets you track your passive investment portfolio as easily as possible - lo
 
 ---
 
+## 📸 Screenshots
+
+Web app (showcasing a 10:1 split and a 0.23$ dividend):
+
+<img src="/images/hold_web.png" alt="Hold website" width="900">
+
+Mobile + Privacy mode:
+
+<img src="/images/hold_mobile_privacy.png" alt="Hold mobile site + privacy mode" width="400">
+
+---
+
 ## 🛠️ Tech Stack
 
 - **Frontend**: Next.js 16 (App Router, Client Components), Tailwind CSS v4, Recharts (Interactive Charts), Lucide React (Icons)
@@ -70,33 +82,74 @@ graph TD
 │   │   ├── api/             # Backend API Route Handlers
 │   │   │   ├── auth/        # NextAuth API configuration
 │   │   │   ├── finance/     # Live stock search endpoints
-│   │   │   ├── portfolio/   # Portfolio summary, history, import/export
-│   │   │   └── transactions/# Individual transaction operations
+│   │   │   └── portfolio/   # Portfolio summary, history, import/export, transactions operations
 │   │   ├── globals.css      # Global Styles (Tailwind v4 imports)
 │   │   ├── layout.tsx       # Root layout & providers
 │   │   └── page.tsx         # Dashboard main page (UI & client logic)
 │   ├── components/          # Shared React components
-│   │   └── Providers.tsx    # NextAuth Session Provider wrapper
 │   ├── lib/                 # Business logic & utilities
-│   │   ├── db.ts            # Prisma client instance
 │   │   ├── finance.ts       # Yahoo Finance & Frankfurter API clients
 │   │   └── portfolio.ts     # Portfolio aggregation & performance math
 │   └── auth.ts              # NextAuth configuration & handlers
 ├── public/                  # Static assets
-├── Dockerfile               # Multi-stage production build
+├── Dockerfile               # production build
 └── package.json             # Project dependencies and scripts
 ```
 
 ---
 
-## 🚀 Getting Started
+## 🐳 Trying it out with Docker
 
-### Prerequisites
+Create a hold app on port 3000, with demo login enabled and mounted host directory for the database:
+
+```bash
+docker pull gabay/hold
+
+docker run -d \
+  -p 3000:3000 \
+  -e ALLOW_DEMO_LOGIN=true \
+  -e AUTH_URL=http://localhost:3000 \
+  -e AUTH_SECRET="replace-this-message-with-64-byte-long-secret-password-right-now" \
+  -v /absolute/path/to/db-folder:/app/data \
+  gabay/hold:latest
+```
+
+> [!IMPORTANT]
+> **Database Host Directory Permissions**:
+> The container runs as a non-root user (`node`, UID `1000`). Ensure your host directory `/absolute/path/to/db-folder` is writeable by UID `1000` or has appropriate read/write permissions.
+
+### 🐳 Using Docker Compose
+
+Create a hold app using Docker Compose:
+
+```docker-compose
+services:
+  hold:
+    container_name: hold
+    image: gabay/hold
+    ports:
+      - 3000:3000
+    environment:
+        ALLOW_DEMO_LOGIN=true
+        AUTH_URL=http://localhost:3000
+        AUTH_SECRET="replace-this-message-with-64-byte-long-secret-password-right-now"
+        # when ready for production - fill and use these variables:
+        # AUTH_OIDC_ISSUER=???
+        # AUTH_OIDC_CLIENT_ID=???
+        # AUTH_OIDC_CLIENT_SECRET=???
+        # AUTH_OIDC_NAME=???
+    volumes:
+      - ./hold/:/app/data/
+```
+
+## 🚀 Running from source
+
+#### Prerequisites
 
 - **Node.js**: `v20.x` or higher
 - **Package Manager**: `pnpm`
 
-### 1. Installation
+#### 1. Installation
 
 Clone the repository and navigate to the root directory.
 
@@ -104,7 +157,7 @@ Clone the repository and navigate to the root directory.
 pnpm install
 ```
 
-### 2. Configure Environment Variables
+#### 2. Configure Environment Variables
 
 Create a `.env` file in the root of the project:
 
@@ -125,7 +178,7 @@ ALLOW_DEMO_LOGIN=true
 # AUTH_OIDC_NAME="AUTH_PROVIDER_NAME"
 ```
 
-### 3. Initialize the Database
+#### 3. Initialize the Database
 
 Apply migrations to setup your SQLite database file. This will automatically create the `prisma/` folder and initialize `hold.db`:
 
@@ -133,7 +186,7 @@ Apply migrations to setup your SQLite database file. This will automatically cre
 npx prisma migrate dev
 ```
 
-### 4. Run the Development Server
+#### 4. Run the Development Server
 
 Start the Next.js development server:
 
@@ -142,45 +195,6 @@ pnpm dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
-
----
-
-## 🐳 Running in Docker (Production)
-
-The project includes a multi-stage Dockerfile that builds an optimized production image (~100MB).
-
-### 1. Get the image
-
-```bash
-docker build -t hold .
-```
-
-Or
-
-```bash
-docker pull gabay/hold
-```
-
-### 2. Run the Container (with Persistence)
-
-To prevent data loss when the container restarts, mount a host directory to `/app/data` where the SQLite database file (`hold.db`) is stored:
-
-```bash
-docker run -d \
-  -p 3000:3000 \
-  --name hold \
-  --env-file .env \
-  -v /absolute/path/to/local/db-folder:/app/data \
-  hold:latest
-```
-
-> [!IMPORTANT]
-> **Database Host Directory Permissions**:
-> The container runs as a non-root user (`node`, UID `1000`). Ensure your host directory `/absolute/path/to/local/db-folder` is writeable by UID `1000` or has appropriate read/write permissions.
-
-> [!NOTE]
-> **Automatic Database Initialization**:
-> If the mounted host directory is empty on first startup, the container's entrypoint script will automatically copy a pre-migrated template database (`hold.db`) into it. Subsequent starts will preserve and use your existing data.
 
 ---
 

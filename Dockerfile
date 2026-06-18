@@ -10,7 +10,8 @@ RUN pnpm install --frozen-lockfile
 # Generate Prisma client
 COPY prisma prisma
 RUN pnpm prisma generate
-RUN DATABASE_URL=file:hold_template.db pnpm prisma migrate deploy
+RUN rm -f prisma/hold.db && \
+    DATABASE_URL=file:hold.db pnpm prisma migrate deploy
 
 # Build project
 COPY tsconfig.json next.config.ts postcss.config.mjs eslint.config.mjs ./
@@ -32,7 +33,7 @@ USER node:node
 
 # Copy standalone folder (builder populated it with static folder)
 COPY --from=builder --chown=node:node /app/.next/standalone .
-# Copy prisma schema and migrated hold_template.db for runtime access
+# Copy prisma schema and migrated hold.db for runtime access
 COPY --from=builder --chown=node:node /app/prisma prisma
 # Copy and set entrypoint script
 COPY --chown=node:node public public

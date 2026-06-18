@@ -3,7 +3,7 @@ set -e
 
 # Path to the database file in the runtime environment
 DB_PATH="/app/data/hold.db"
-TEMPLATE_PATH="/app/prisma/hold_template.db"
+TEMPLATE_PATH="/app/prisma/hold.db"
 
 # Check if the database file exists
 if [ ! -f "$DB_PATH" ]; then
