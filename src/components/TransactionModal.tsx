@@ -188,6 +188,10 @@ export default function TransactionModal({
 
     if (!isOpen) return null;
 
+    const labelClasses = "block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1";
+    const inputClasses =
+        "w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100";
+
     return (
         <div
             className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
@@ -218,9 +222,7 @@ export default function TransactionModal({
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div className="relative">
-                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                                Ticker Symbol
-                            </label>
+                            <label className={labelClasses}>Ticker Symbol</label>
                             <input
                                 ref={symbolInputRef}
                                 type="text"
@@ -230,7 +232,7 @@ export default function TransactionModal({
                                 onChange={(e) => handleSymbolChange(e.target.value)}
                                 onKeyDown={handleSymbolKeyDown}
                                 onBlur={() => setShowSuggestions(false)}
-                                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
+                                className={inputClasses}
                                 autoComplete="off"
                             />
 
@@ -283,13 +285,11 @@ export default function TransactionModal({
                             )}
                         </div>
                         <div>
-                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                                Type
-                            </label>
+                            <label className={labelClasses}>Type</label>
                             <select
                                 value={formType}
                                 onChange={(e) => setFormType(e.target.value)}
-                                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
+                                className={inputClasses}
                             >
                                 <option value="BUY">BUY</option>
                                 <option value="SELL">SELL</option>
@@ -299,9 +299,7 @@ export default function TransactionModal({
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                                Quantity
-                            </label>
+                            <label className={labelClasses}>Quantity</label>
                             <input
                                 type="number"
                                 step="any"
@@ -309,14 +307,12 @@ export default function TransactionModal({
                                 placeholder="e.g. 5"
                                 value={formQuantity}
                                 onChange={(e) => setFormQuantity(e.target.value)}
-                                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
+                                className={inputClasses}
                             />
                         </div>
 
                         <div>
-                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                                Price Per Share
-                            </label>
+                            <label className={labelClasses}>Price Per Share</label>
                             <input
                                 type="number"
                                 step="any"
@@ -324,16 +320,14 @@ export default function TransactionModal({
                                 placeholder="e.g. 175.50"
                                 value={formPrice}
                                 onChange={(e) => setFormPrice(e.target.value)}
-                                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
+                                className={inputClasses}
                             />
                         </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                                Currency
-                            </label>
+                            <label className={labelClasses}>Currency</label>
                             <input
                                 type="text"
                                 placeholder="e.g. USD (optional)"
@@ -354,20 +348,18 @@ export default function TransactionModal({
                                             : `Unsupported currency "${formCurrency}".`,
                                     )
                                 }
-                                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
+                                className={inputClasses}
                             />
                         </div>
 
                         <div>
-                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                                Date
-                            </label>
+                            <label className={labelClasses}>Date</label>
                             <input
                                 type="date"
                                 required
                                 value={formDate}
                                 onChange={(e) => setFormDate(e.target.value)}
-                                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-100"
+                                className={inputClasses}
                             />
                         </div>
                     </div>
