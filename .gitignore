@@ -5,6 +5,7 @@ hold.db*
 .stignore
 scripts/deploy.sh
 scripts/build.sh
+AGENTS.md
 
 # dependencies
 /node_modules

@@ -124,11 +124,11 @@ async function getAssetData(
     chartDays: Date[],
 ): Promise<AssetData> {
     // find the first transaction date
-    const firstActivity = getDate(
+    const firstTransaction = getDate(
         Math.min(...transactions.map((tx) => tx.transactionDate.getTime())),
     );
     // get asset info and transactions in currancy
-    const assetInfo = await getAssetInfo(symbol, firstActivity, currency);
+    const assetInfo = await getAssetInfo(symbol, firstTransaction, currency);
     const transactionsInCurrency = await convertTransactionsCurrency(transactions, currency);
 
     const calculator = new AssetDataCalculator(transactionsInCurrency, assetInfo);

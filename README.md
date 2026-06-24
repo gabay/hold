@@ -11,9 +11,9 @@ Hold lets you track your passive investment portfolio as easily as possible - lo
 ## 🌟 Features
 
 - **Simple & Smart**
-    - **Multi-currency support** - Convert all activity to your desired currency on-the-fly.
+    - **Multi-currency support** - Convert all transactions to your desired currency on-the-fly.
     - **Stock-splits and dividends calculation** - Adjust holdings and valuation automatically.
-    - **Import/export** all of your activity to/from CSV.
+    - **Import/export** all of your transactions to/from CSV.
     - **Multi-user support** - OIDC by default, optional demo user for first impression.
     - **Privacy mode** - hide absolute numbers and keep only percentage changes.
 
@@ -32,69 +32,6 @@ Web app (showcasing a 10:1 split and a 0.23$ dividend):
 Mobile + Privacy mode:
 
 <img src="/images/hold_mobile_privacy.png" alt="Hold mobile site + privacy mode" width="400">
-
----
-
-## 🛠️ Tech Stack
-
-- **Frontend**: Next.js 16 (App Router, Client Components), Tailwind CSS v4, Recharts (Interactive Charts), Lucide React (Icons)
-- **Backend**: Next.js Route Handlers (API Routes)
-- **Database**: SQLite via Prisma ORM
-- **Authentication**: NextAuth.js (v5 Beta) - Support for OIDC and Mock Developer Login
-- **External APIs**: Yahoo Finance (Asset prices via `yahoo-finance2`), Frankfurter API (Exchange rates)
-
----
-
-## 🏗️ Architecture & Data Flow
-
-The following diagram illustrates how the application components interact:
-
-```mermaid
-graph TD
-    User([User Browser]) -->|HTTPS| Frontend[Next.js Frontend UI]
-    Frontend -->|API Calls| Backend[Next.js API Routes]
-
-    subgraph Backend Services
-        Backend -->|Auth Session| NextAuth[NextAuth.js]
-        Backend -->|User Queries| Prisma[Prisma ORM]
-        Prisma -->|Read/Write| SQLite[(SQLite Database)]
-
-        Backend -->|Portfolio Operations| Portfolio[Portfolio Logic]
-        Portfolio -->|Portfolio Queries| Prisma
-        Portfolio -->|Quotes| YahooFinance{{Yahoo Finance API}}
-        Portfolio -->|Exchange Rates| Frankfurter{{Frankfurter API}}
-    end
-
-    NextAuth -->|OIDC| ExternalOIDC[OIDC Provider]
-```
-
----
-
-## 📁 Project Structure
-
-```
-/
-├── prisma/                  # Database schema & migrations
-│   ├── schema.prisma        # Prisma schema definition
-│   └── migrations/          # SQLite database migrations
-├── src/
-│   ├── app/                 # Next.js App Router
-│   │   ├── api/             # Backend API Route Handlers
-│   │   │   ├── auth/        # NextAuth API configuration
-│   │   │   ├── finance/     # Live stock search endpoints
-│   │   │   └── portfolio/   # Portfolio summary, history, import/export, transactions operations
-│   │   ├── globals.css      # Global Styles (Tailwind v4 imports)
-│   │   ├── layout.tsx       # Root layout & providers
-│   │   └── page.tsx         # Dashboard main page (UI & client logic)
-│   ├── components/          # Shared React components
-│   ├── lib/                 # Business logic & utilities
-│   │   ├── finance.ts       # Yahoo Finance & Frankfurter API clients
-│   │   └── portfolio.ts     # Portfolio aggregation & performance math
-│   └── auth.ts              # NextAuth configuration & handlers
-├── public/                  # Static assets
-├── Dockerfile               # production build
-└── package.json             # Project dependencies and scripts
-```
 
 ---
 
@@ -238,6 +175,69 @@ OIDC is configured through the environment variables.
     AUTH_OIDC_CLIENT_SECRET="AUTHENTIK_CLIENT_SECRET"
     AUTH_OIDC_NAME="authentik"
     ```
+
+---
+
+## 🛠️ Tech Stack
+
+- **Frontend**: Next.js 16 (App Router, Client Components), Tailwind CSS v4, Recharts (Interactive Charts), Lucide React (Icons)
+- **Backend**: Next.js Route Handlers (API Routes)
+- **Database**: SQLite via Prisma ORM
+- **Authentication**: NextAuth.js (v5 Beta) - Support for OIDC and Mock Developer Login
+- **External APIs**: Yahoo Finance (Asset prices via `yahoo-finance2`), Frankfurter API (Exchange rates)
+
+---
+
+## 🏗️ Architecture & Data Flow
+
+The following diagram illustrates how the application components interact:
+
+```mermaid
+graph TD
+    User([User Browser]) -->|HTTPS| Frontend[Next.js Frontend UI]
+    Frontend -->|API Calls| Backend[Next.js API Routes]
+
+    subgraph Backend Services
+        Backend -->|Auth Session| NextAuth[NextAuth.js]
+        Backend -->|User Queries| Prisma[Prisma ORM]
+        Prisma -->|Read/Write| SQLite[(SQLite Database)]
+
+        Backend -->|Portfolio Operations| Portfolio[Portfolio Logic]
+        Portfolio -->|Portfolio Queries| Prisma
+        Portfolio -->|Quotes| YahooFinance{{Yahoo Finance API}}
+        Portfolio -->|Exchange Rates| Frankfurter{{Frankfurter API}}
+    end
+
+    NextAuth -->|OIDC| ExternalOIDC[OIDC Provider]
+```
+
+---
+
+## 📁 Project Structure
+
+```
+/
+├── prisma/                  # Database schema & migrations
+│   ├── schema.prisma        # Prisma schema definition
+│   └── migrations/          # SQLite database migrations
+├── src/
+│   ├── app/                 # Next.js App Router
+│   │   ├── api/             # Backend API Route Handlers
+│   │   │   ├── auth/        # NextAuth API configuration
+│   │   │   ├── finance/     # Live stock search endpoints
+│   │   │   └── portfolio/   # Portfolio summary, history, import/export, transactions operations
+│   │   ├── globals.css      # Global Styles (Tailwind v4 imports)
+│   │   ├── layout.tsx       # Root layout & providers
+│   │   └── page.tsx         # Dashboard main page (UI & client logic)
+│   ├── components/          # Shared React components
+│   ├── lib/                 # Business logic & utilities
+│   │   ├── finance.ts       # Yahoo Finance & Frankfurter API clients
+│   │   └── portfolio.ts     # Portfolio aggregation & performance math
+│   └── auth.ts              # NextAuth configuration & handlers
+├── public/                  # Static assets
+├── Dockerfile               # production build
+└── package.json             # Project dependencies and scripts
+```
 
 ---
 
