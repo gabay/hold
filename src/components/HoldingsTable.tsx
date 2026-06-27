@@ -8,6 +8,8 @@ interface HoldingsTableProps {
     loading: boolean;
     displayCurrency: string;
     hideInPrivacyMode: (value: string | number) => string;
+    selectedSymbol?: string | null;
+    onSelectSymbol?: (symbol: string) => void;
 }
 
 export default function HoldingsTable({
@@ -15,6 +17,8 @@ export default function HoldingsTable({
     loading,
     displayCurrency,
     hideInPrivacyMode,
+    selectedSymbol,
+    onSelectSymbol,
 }: HoldingsTableProps) {
     return (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 shadow-md overflow-hidden">
@@ -34,22 +38,28 @@ export default function HoldingsTable({
                     <table className="w-full text-left text-sm text-slate-400 border-collapse">
                         <thead>
                             <tr className="border-b border-slate-600 text-xs font-bold uppercase tracking-wider text-slate-500">
-                                <th className="pb-3 pr-4">Symbol</th>
+                                <th className="pb-3 px-4">Symbol</th>
                                 <th className="pb-3 px-4">Shares</th>
                                 <th className="pb-3 px-4">Avg Buy Price</th>
                                 <th className="pb-3 px-4">Current Price</th>
                                 <th className="pb-3 px-4">Cost Basis ({displayCurrency})</th>
                                 <th className="pb-3 px-4">Market Value ({displayCurrency})</th>
                                 <th className="pb-3 px-4">Realized ({displayCurrency})</th>
-                                <th className="pb-3 pl-4 text-right">
+                                <th className="pb-3 px-4 text-right">
                                     Profit / Loss ({displayCurrency})
                                 </th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800 text-slate-200 font-medium">
                             {summary.assets.map((holding) => (
-                                <tr key={holding.symbol} className="hover:bg-slate-800/20">
-                                    <td className="py-4 pr-4">
+                                <tr
+                                    key={holding.symbol}
+                                    onClick={() => onSelectSymbol?.(holding.symbol)}
+                                    className={`cursor-pointer ${
+                                        selectedSymbol === holding.symbol ? "bg-slate-800/40" : "hover:bg-slate-800/20"
+                                    }`}
+                                >
+                                    <td className="py-4 px-4">
                                         <div className="flex flex-col">
                                             <span className="font-bold text-white">
                                                 {holding.symbol}
@@ -74,21 +84,21 @@ export default function HoldingsTable({
                                     </td>
                                     <td className="py-4 px-4">
                                         {hideInPrivacyMode(
-                                            formatCurrency(holding.cost, displayCurrency),
+                                            formatCurrency(holding.cost, holding.currency),
                                         )}
                                     </td>
                                     <td className="py-4 px-4">
                                         {hideInPrivacyMode(
-                                            formatCurrency(holding.value, displayCurrency),
+                                            formatCurrency(holding.value, holding.currency),
                                         )}
                                     </td>
                                     <td className="py-4 px-4">
                                         {hideInPrivacyMode(
-                                            formatCurrency(holding.realized, displayCurrency),
+                                            formatCurrency(holding.realized, holding.currency),
                                         )}
                                     </td>
                                     <td
-                                        className={`py-4 pl-4 text-right ${holding.profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}
+                                        className={`py-4 px-4 text-right ${holding.profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}
                                     >
                                         <div className="flex flex-col items-end">
                                             <span
@@ -99,17 +109,12 @@ export default function HoldingsTable({
                                                 }
                                             >
                                                 {hideInPrivacyMode(
-                                                    (holding.profit >= 0 ? "+" : "") +
-                                                        formatCurrency(
-                                                            holding.profit,
-                                                            displayCurrency,
-                                                        ),
+                                                    formatCurrency(holding.profit, holding.currency),
                                                 )}
                                             </span>
                                             <span
                                                 className={`text-xs font-bold ${holding.profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}
                                             >
-                                                {holding.profit >= 0 ? "+" : ""} + {" "}
                                                 {holding.profitPercentage.toFixed(2)}%
                                             </span>
                                         </div>

@@ -76,7 +76,7 @@ describe("HoldingsTable", () => {
 
     it("shows profit in green", () => {
         render(<HoldingsTable {...mockProps} />);
-        const profitCell = screen.getByText("+$250.00").closest("td");
+        const profitCell = screen.getByText("$250.00").closest("td");
         expect(profitCell).toHaveClass("text-emerald-400");
     });
     it("shows loss in red", () => {

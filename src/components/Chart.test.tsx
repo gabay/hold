@@ -21,7 +21,7 @@ describe("Chart", () => {
 
     it("renders without crashing", () => {
         render(<Chart {...mockProps} />);
-        expect(screen.getByText("Valuation History")).toBeInTheDocument();
+        expect(screen.getByText("Portfolio Valuation")).toBeInTheDocument();
     });
 
     it("shows loading state", () => {

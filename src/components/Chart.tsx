@@ -16,6 +16,7 @@ import { Loader2 } from "lucide-react";
 
 interface ChartProps {
     data: ChartDataPoint[];
+    title?: string;
     loading: boolean;
     privacyMode: boolean;
     timeRange: string;
@@ -25,6 +26,7 @@ interface ChartProps {
 
 export default function Chart({
     data,
+    title,
     loading,
     privacyMode,
     timeRange,
@@ -50,7 +52,9 @@ export default function Chart({
     return (
         <div className="lg:col-span-3 rounded-2xl border border-slate-800 bg-slate-900/40 p-6 shadow-md flex flex-col justify-between min-h-100 max-h-fit">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-                <h3 className="text-lg font-bold text-slate-100">Valuation History</h3>
+                <h3 className="text-lg font-bold text-slate-100">
+                    {title ? `${title} Valuation` : "Portfolio Valuation"}
+                </h3>
                 <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
                     {timeRanges.map((range) => (
                         <button

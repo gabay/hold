@@ -51,6 +51,7 @@ export default function Dashboard({ user }: DashboardProps) {
     const [privacyMode, setPrivacyMode] = useState(
         () => localStorageGet("hold_privacyMode") === "true",
     );
+    const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
     const privacyModeText = "••••••";
     const hideInPrivacyMode = (value: string | number): string => {
         return privacyMode ? privacyModeText : value.toString();
@@ -64,7 +65,6 @@ export default function Dashboard({ user }: DashboardProps) {
 
     const fetchPortfolioData = useCallback(() => {
         if (portfolio?.id) {
-            console.log("CCC");
             setLoading(true);
             setErrorMessage(null);
 
@@ -185,6 +185,8 @@ export default function Dashboard({ user }: DashboardProps) {
 
     // UI
 
+    const selectedAsset = summary?.assets.find((a) => a.symbol === selectedSymbol);
+
     return (
         <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
             <Header
@@ -223,7 +225,8 @@ export default function Dashboard({ user }: DashboardProps) {
 
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                     <Chart
-                        data={history}
+                        data={selectedAsset?.history ?? history}
+                        title={selectedSymbol ?? undefined}
                         loading={loading}
                         privacyMode={privacyMode}
                         timeRange={timeRange}
@@ -250,6 +253,10 @@ export default function Dashboard({ user }: DashboardProps) {
                     loading={loading}
                     displayCurrency={displayCurrency}
                     hideInPrivacyMode={hideInPrivacyMode}
+                    selectedSymbol={selectedSymbol}
+                    onSelectSymbol={(symbol) =>
+                        setSelectedSymbol((prev) => (prev === symbol ? null : symbol))
+                    }
                 />
 
                 <TransactionsTable

@@ -61,10 +61,10 @@ describe("Dashboard", () => {
 
         render(<Dashboard user={mockUser} />);
 
-        expect(screen.getByText("Hold")).toBeInTheDocument();
+        expect(await screen.findByText("Hold")).toBeInTheDocument();
     });
 
-    it("renders header with user info", () => {
+    it("renders header with user info", async () => {
         vi.mocked(global.fetch).mockResolvedValue({
             ok: true,
             json: async () => [{ id: "1", name: "Test Portfolio" }],
@@ -72,7 +72,7 @@ describe("Dashboard", () => {
 
         render(<Dashboard user={mockUser} />);
 
-        expect(screen.getByText("Test User")).toBeInTheDocument();
+        expect(await screen.findByText("Test User")).toBeInTheDocument();
         expect(screen.getByText("test@example.com")).toBeInTheDocument();
     });
 
@@ -118,7 +118,7 @@ describe("Dashboard", () => {
         });
     });
 
-    it("has logout button in header", () => {
+    it("has logout button in header", async () => {
         vi.mocked(global.fetch).mockResolvedValue({
             ok: true,
             json: async () => [{ id: "1", name: "Test Portfolio" }],
@@ -126,11 +126,11 @@ describe("Dashboard", () => {
 
         render(<Dashboard user={mockUser} />);
 
-        const logoutButton = screen.getByRole("button", { name: "Logout" });
+        const logoutButton = await screen.findByRole("button", { name: "Logout" });
         expect(logoutButton).toBeInTheDocument();
     });
 
-    it("has privacy toggle button in header", () => {
+    it("has privacy toggle button in header", async () => {
         vi.mocked(global.fetch).mockResolvedValue({
             ok: true,
             json: async () => [{ id: "1", name: "Test Portfolio" }],
@@ -138,7 +138,7 @@ describe("Dashboard", () => {
 
         render(<Dashboard user={mockUser} />);
 
-        const privacyButton = screen.getByRole("button", {
+        const privacyButton = await screen.findByRole("button", {
             name: "Hide Balances",
         });
         expect(privacyButton).toBeInTheDocument();
