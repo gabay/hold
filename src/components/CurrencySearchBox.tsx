@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { Search, ChevronDown } from "lucide-react";
-import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
+import { CURRENCIES_CHARACTERS, SUPPORTED_CURRENCIES } from "@/lib/currencies";
 
 interface CurrencySearchBoxProps {
     value: string;
@@ -53,19 +53,7 @@ export default function CurrencySearchBox({ value, onChange }: CurrencySearchBox
                     aria-haspopup="true"
                 >
                     <span>
-                        {value} (
-                        {SUPPORTED_CURRENCIES[value]
-                            ? value === "USD"
-                                ? "$"
-                                : value === "EUR"
-                                  ? "€"
-                                  : value === "ILS"
-                                    ? "₪"
-                                    : value === "GBP"
-                                      ? "£"
-                                      : value
-                            : value}
-                        )
+                        {value} ({CURRENCIES_CHARACTERS[value] || value})
                     </span>
                     <ChevronDown className="-mr-1 h-4 w-4 text-slate-400" aria-hidden="true" />
                 </button>
@@ -73,7 +61,7 @@ export default function CurrencySearchBox({ value, onChange }: CurrencySearchBox
 
             {isOpen && (
                 <div className="absolute right-0 z-50 mt-2 w-72 origin-top-right rounded-lg bg-slate-950 shadow-xl ring-1 ring-black ring-opacity-5 focus:outline-none max-h-96 flex flex-col">
-                    <div className="p-2 border-b border-slate-900 sticky top-0 bg-slate-950">
+                    <div className="p-3 border-b border-slate-900 sticky top-0 bg-slate-950">
                         <div className="relative">
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
                             <input

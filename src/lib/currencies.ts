@@ -31,3 +31,10 @@ export const SUPPORTED_CURRENCIES: Record<string, string> = {
     TRY: "Turkish Lira",
     ZAR: "South African Rand",
 };
+
+export const CURRENCIES_CHARACTERS: Record<string, string> = {
+    "USD": "$",
+    "EUR": "€",
+    "ILS": "₪",
+    "GBP": "£",
+};

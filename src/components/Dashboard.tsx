@@ -1,6 +1,7 @@
 "use client";
 
 import CurrencySearchBox from "@/components/CurrencySearchBox";
+import PortfolioSelect from "@/components/PortfolioSelect";
 import TransactionModal from "@/components/TransactionModal";
 import Chart from "@/components/Chart";
 import HoldingsTable from "@/components/HoldingsTable";
@@ -32,10 +33,15 @@ interface DashboardProps {
     user: User;
 }
 
+type PortfolioRef = { id: string; name: string };
+
 export default function Dashboard({ user }: DashboardProps) {
     // State
 
-    const [portfolio, setPortfolio] = useState<{ id: string; name: string } | null>(null);
+    const [portfolios, setPortfolios] = useState<PortfolioRef[]>([]);
+    const [portfolioId, setPortfolioId] = useState<string | null>(
+        localStorageGet("hold_portfolioId") || null,
+    );
     const [summary, setSummary] = useState<PortfolioSummary | null>(null);
     const [history, setHistory] = useState<ChartDataPoint[]>([]);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -52,11 +58,15 @@ export default function Dashboard({ user }: DashboardProps) {
         () => localStorageGet("hold_privacyMode") === "true",
     );
     const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+
+    const selectPortfolioId = (id: string) => {
+        setPortfolioId(id);
+        localStorage.setItem("hold_portfolioId", id);
+    };
     const privacyModeText = "••••••";
     const hideInPrivacyMode = (value: string | number): string => {
         return privacyMode ? privacyModeText : value.toString();
     };
-
     const formatOrHideCurrency = (value: number) => {
         return privacyMode ? privacyModeText : formatCurrency(value, displayCurrency);
     };
@@ -64,11 +74,11 @@ export default function Dashboard({ user }: DashboardProps) {
     // Data fetching
 
     const fetchPortfolioData = useCallback(() => {
-        if (portfolio?.id) {
+        if (portfolioId) {
             setLoading(true);
             setErrorMessage(null);
 
-            const url = `/api/portfolio/${portfolio.id}/data?currency=${displayCurrency}&days=${timeRange}`;
+            const url = `/api/portfolio/${portfolioId}/data?currency=${displayCurrency}&days=${timeRange}`;
             fetch(url, { cache: "no-store" })
                 .then(async (res) => {
                     if (!res.ok) throw new Error("Failed to fetch portfolio data");
@@ -84,26 +94,53 @@ export default function Dashboard({ user }: DashboardProps) {
                     setLoading(false);
                 });
         }
-    }, [portfolio, displayCurrency, timeRange]);
+    }, [portfolioId, displayCurrency, timeRange]);
 
+    // Load the portfolio list once, then open the saved one (or the first).
     useEffect(() => {
-        if (portfolio === null) {
-            fetch("/api/portfolio")
-                .then(async (res) => {
-                    if (!res.ok) throw new Error("Failed to load portfolio");
-                    const data = await res.json();
-                    if (!data || data.length == 0) throw new Error("No portfolio initialized");
-                    setPortfolio(data[0]);
-                })
-                .catch((err) => {
-                    console.error(err);
-                    setErrorMessage(err.message);
-                });
-        } else {
-            const timeout = setTimeout(fetchPortfolioData, 50);
-            return () => clearTimeout(timeout);
-        }
-    }, [portfolio, fetchPortfolioData]);
+        fetch("/api/portfolio")
+            .then(async (res) => {
+                if (!res.ok) throw new Error("Failed to load portfolio");
+                const data: PortfolioRef[] = await res.json();
+                if (!data?.length) throw new Error("No portfolio initialized");
+                setPortfolios(data);
+                selectPortfolioId(localStorage.getItem("hold_portfolioId") || data[0].id);
+            })
+            .catch((err) => {
+                console.error(err);
+                setErrorMessage(err.message);
+            });
+    }, []);
+
+    // Refetch data whenever the selected portfolio (or its query params) change.
+    useEffect(() => {
+        const timeout = setTimeout(fetchPortfolioData, 50);
+        return () => clearTimeout(timeout);
+    }, [fetchPortfolioData]);
+
+    const handleAddPortfolio = async (name: string) => {
+        const res = await fetch("/api/portfolio", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name }),
+        });
+        if (!res.ok) return setErrorMessage("Failed to create portfolio");
+        const created: PortfolioRef = await res.json();
+        setPortfolios((prev) => [created, ...prev]);
+        selectPortfolioId(created.id);
+    };
+
+    const handleRenamePortfolio = async (name: string) => {
+        if (!portfolioId) return;
+        const res = await fetch(`/api/portfolio/${portfolioId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name }),
+        });
+        if (!res.ok) return setErrorMessage("Failed to rename portfolio");
+        setPortfolios((prev) => prev.map((p) => (p.id === portfolioId ? { ...p, name } : p)));
+        selectPortfolioId(portfolioId);
+    };
 
     // Handlers
 
@@ -113,7 +150,7 @@ export default function Dashboard({ user }: DashboardProps) {
 
         setErrorMessage(null);
         try {
-            const res = await fetch(`/api/portfolio/${portfolio?.id}/transactions/${txId}`, {
+            const res = await fetch(`/api/portfolio/${portfolioId!}/transactions/${txId}`, {
                 method: "DELETE",
             });
             if (!res.ok) throw new Error("Failed to delete transaction");
@@ -125,12 +162,12 @@ export default function Dashboard({ user }: DashboardProps) {
     };
 
     const handleExportCSV = () => {
-        if (!portfolio?.id) return;
-        window.open(`/api/portfolio/${portfolio.id}/export`, "_blank");
+        if (!portfolioId) return;
+        window.open(`/api/portfolio/${portfolioId}/export`, "_blank");
     };
 
     const handleImportCSV = async (file: File | undefined) => {
-        if (!file || !portfolio?.id) return;
+        if (!file || !portfolioId) return;
 
         setErrorMessage(null);
 
@@ -138,7 +175,7 @@ export default function Dashboard({ user }: DashboardProps) {
         formData.append("file", file);
 
         try {
-            const res = await fetch(`/api/portfolio/${portfolio.id}/import`, {
+            const res = await fetch(`/api/portfolio/${portfolioId}/import`, {
                 method: "POST",
                 body: formData,
             });
@@ -160,7 +197,7 @@ export default function Dashboard({ user }: DashboardProps) {
     };
 
     const handleClearTransactions = async () => {
-        if (!portfolio?.id) return;
+        if (!portfolioId) return;
         const confirmClear = window.confirm(
             "Are you sure you want to clear all transactions? This action is permanent and cannot be undone.",
         );
@@ -168,7 +205,7 @@ export default function Dashboard({ user }: DashboardProps) {
 
         setErrorMessage(null);
         try {
-            const res = await fetch(`/api/portfolio/${portfolio.id}/transactions`, {
+            const res = await fetch(`/api/portfolio/${portfolioId}/transactions`, {
                 method: "DELETE",
             });
             if (!res.ok) throw new Error("Failed to clear transactions");
@@ -191,6 +228,11 @@ export default function Dashboard({ user }: DashboardProps) {
         <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
             <Header
                 user={user}
+                portfolios={portfolios}
+                portfolioId={portfolioId}
+                onSelectPortfolio={selectPortfolioId}
+                onAddPortfolio={handleAddPortfolio}
+                onRenamePortfolio={handleRenamePortfolio}
                 displayCurrency={displayCurrency}
                 onDisplayCurrencyChange={(val) => {
                     setDisplayCurrency(val);
@@ -276,7 +318,7 @@ export default function Dashboard({ user }: DashboardProps) {
                         setShowTransactionModal(false);
                         setEditingTransaction(null);
                     }}
-                    portfolioId={portfolio?.id || ""}
+                    portfolioId={portfolioId || ""}
                     editingTransaction={editingTransaction}
                     onSuccess={fetchPortfolioData}
                 />
@@ -287,6 +329,11 @@ export default function Dashboard({ user }: DashboardProps) {
 
 interface HeaderProps {
     user: User;
+    portfolios: PortfolioRef[];
+    portfolioId: string | null;
+    onSelectPortfolio: (id: string) => void;
+    onAddPortfolio: (name: string) => void;
+    onRenamePortfolio: (name: string) => void;
     displayCurrency: string;
     onDisplayCurrencyChange: (currency: string) => void;
     privacyMode: boolean;
@@ -295,6 +342,11 @@ interface HeaderProps {
 
 function Header({
     user,
+    portfolios,
+    portfolioId,
+    onSelectPortfolio,
+    onAddPortfolio,
+    onRenamePortfolio,
     displayCurrency,
     onDisplayCurrencyChange,
     privacyMode,
@@ -318,8 +370,16 @@ function Header({
                     </div>
 
                     <div className="flex items-center gap-4">
+                        <div className="ml-2">
+                            <PortfolioSelect
+                                portfolios={portfolios}
+                                portfolioId={portfolioId}
+                                onSelect={onSelectPortfolio}
+                                onCreate={onAddPortfolio}
+                                onRename={onRenamePortfolio}
+                            />
+                        </div>
                         <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-slate-400">Currency:</span>
                             <CurrencySearchBox
                                 value={displayCurrency}
                                 onChange={onDisplayCurrencyChange}

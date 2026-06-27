@@ -12,7 +12,7 @@ export async function GET(_req: NextRequest) {
 
     let portfolios = await db.portfolio.findMany({
         where: { userId },
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: "asc" },
     });
 
     if (portfolios.length === 0) {
