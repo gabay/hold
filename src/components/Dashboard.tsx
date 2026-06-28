@@ -1,33 +1,30 @@
 "use client";
 
-import CurrencySearchBox from "@/components/CurrencySearchBox";
-import PortfolioSelect from "@/components/PortfolioSelect";
-import TransactionModal from "@/components/TransactionModal";
 import Chart from "@/components/Chart";
+import CurrencySearchBox from "@/components/CurrencySearchBox";
 import HoldingsTable from "@/components/HoldingsTable";
+import Modal from "@/components/Modal";
+import PortfolioSelect from "@/components/PortfolioSelect";
+import SummaryCard from "@/components/SummaryCard";
+import TransactionPanel from "@/components/TransactionPanel";
 import TransactionsTable from "@/components/TransactionsTable";
+import { formatCurrency, localStorageGet } from "@/components/util";
+import { ChartDataPoint, PortfolioData, PortfolioSummary } from "@/lib/portfolio";
+import { Transaction } from "@prisma/client";
 import {
+    ArrowLeftRight,
     DollarSign,
-    Download,
     Eye,
     EyeOff,
     HandCoins,
-    Loader2,
     LogOut,
-    Plus,
-    Trash,
     Percent,
-    Upload,
     Wallet,
 } from "lucide-react";
-import { signOut } from "next-auth/react";
-import { useCallback, useEffect, useRef, useState } from "react";
-
-import { ChartDataPoint, PortfolioData, PortfolioSummary } from "@/lib/portfolio";
-import { Transaction } from "@prisma/client";
-import SummaryCard from "@/components/SummaryCard";
 import { User } from "next-auth";
-import { formatCurrency, localStorageGet } from "./util";
+import { signOut } from "next-auth/react";
+import { useCallback, useEffect, useState } from "react";
+import ManageTransactionsPanel from "./ManageTransactionsPanel";
 
 interface DashboardProps {
     user: User;
@@ -58,6 +55,7 @@ export default function Dashboard({ user }: DashboardProps) {
         () => localStorageGet("hold_privacyMode") === "true",
     );
     const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+    const [showManageModal, setShowManageModal] = useState(false);
 
     const selectPortfolioId = (id: string) => {
         setPortfolioId(id);
@@ -244,6 +242,7 @@ export default function Dashboard({ user }: DashboardProps) {
                     setPrivacyMode(newPrivacyMode);
                     localStorage.setItem("hold_privacyMode", String(newPrivacyMode));
                 }}
+                onManageTransactions={() => setShowManageModal(true)}
             />
 
             <main className="grow mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
@@ -265,7 +264,7 @@ export default function Dashboard({ user }: DashboardProps) {
                     formatOrHideCurrency={formatOrHideCurrency}
                 />
 
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                <div className="grid grid-cols-1">
                     <Chart
                         data={selectedAsset?.history ?? history}
                         title={selectedSymbol ?? undefined}
@@ -277,16 +276,6 @@ export default function Dashboard({ user }: DashboardProps) {
                             localStorage.setItem("portfolio_timeRange", range);
                         }}
                         formatOrHideCurrency={formatOrHideCurrency}
-                    />
-
-                    <QuickActionsPanel
-                        onAddTransaction={() => {
-                            setEditingTransaction(null);
-                            setShowTransactionModal(true);
-                        }}
-                        onExportCSV={handleExportCSV}
-                        onImportCSV={handleImportCSV}
-                        onClearTransactions={handleClearTransactions}
                     />
                 </div>
 
@@ -312,15 +301,42 @@ export default function Dashboard({ user }: DashboardProps) {
                     onDelete={handleDeleteTransaction}
                 />
 
-                <TransactionModal
+                <Modal
+                    isOpen={showManageModal}
+                    onClose={() => setShowManageModal(false)}
+                    title="Manage Transactions"
+                    content={
+                        <ManageTransactionsPanel
+                            onAddTransaction={() => {
+                                setShowManageModal(false);
+                                setEditingTransaction(null);
+                                setShowTransactionModal(true);
+                            }}
+                            onExportCSV={handleExportCSV}
+                            onImportCSV={handleImportCSV}
+                            onClearTransactions={handleClearTransactions}
+                        />
+                    }
+                />
+
+                <Modal
                     isOpen={showTransactionModal}
                     onClose={() => {
                         setShowTransactionModal(false);
                         setEditingTransaction(null);
                     }}
-                    portfolioId={portfolioId || ""}
-                    editingTransaction={editingTransaction}
-                    onSuccess={fetchPortfolioData}
+                    title={editingTransaction ? "Edit Transaction" : "Add Transaction"}
+                    content={
+                        <TransactionPanel
+                            portfolioId={portfolioId || ""}
+                            editingTransaction={editingTransaction}
+                            onSuccess={() => {
+                                setShowTransactionModal(false);
+                                setEditingTransaction(null);
+                                fetchPortfolioData();
+                            }}
+                        />
+                    }
                 />
             </main>
         </div>
@@ -338,6 +354,7 @@ interface HeaderProps {
     onDisplayCurrencyChange: (currency: string) => void;
     privacyMode: boolean;
     onTogglePrivacy: () => void;
+    onManageTransactions: () => void;
 }
 
 function Header({
@@ -351,6 +368,7 @@ function Header({
     onDisplayCurrencyChange,
     privacyMode,
     onTogglePrivacy,
+    onManageTransactions,
 }: HeaderProps) {
     return (
         <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-40">
@@ -387,6 +405,13 @@ function Header({
                             onChange={onDisplayCurrencyChange}
                         />
 
+                        <button
+                            onClick={onManageTransactions}
+                            className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-all"
+                            title="Manage Transactions"
+                        >
+                            <ArrowLeftRight className="h-5 w-5" />
+                        </button>
                         <button
                             onClick={onTogglePrivacy}
                             className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-all"
@@ -492,118 +517,5 @@ function SummaryCards({ loading, summary, formatOrHideCurrency }: SummaryCardsPr
                 )
             )}
         </>
-    );
-}
-
-interface QuickActionsPanelProps {
-    onAddTransaction: () => void;
-    onExportCSV: () => void;
-    onImportCSV: (file: File | undefined) => void;
-    onClearTransactions: () => void;
-}
-
-function QuickActionsPanel({
-    onAddTransaction,
-    onExportCSV,
-    onImportCSV,
-    onClearTransactions,
-}: QuickActionsPanelProps) {
-    const [isImporting, setIsImporting] = useState(false);
-    const [isClearing, setIsClearing] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
-    return (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 shadow-md flex flex-col space-y-6">
-            <h3 className="text-lg font-bold text-slate-100">Manage Transactions</h3>
-
-            <div className="flex flex-col gap-3">
-                <button
-                    type="button"
-                    onClick={onAddTransaction}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white hover:bg-sky-500 transition-all shadow-md shadow-sky-900/20"
-                >
-                    <Plus className="h-4 w-4" /> Add Transaction
-                </button>
-
-                <button
-                    onClick={onExportCSV}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition-all"
-                >
-                    <Download className="h-4 w-4" /> Export Transactions
-                </button>
-
-                <label className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition-all">
-                    {isImporting ? (
-                        <>
-                            <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> Importing...
-                        </>
-                    ) : (
-                        <>
-                            <Upload className="h-4 w-4" /> Import Transactions
-                        </>
-                    )}
-                    <input
-                        type="file"
-                        accept=".csv"
-                        className="hidden"
-                        ref={fileInputRef}
-                        onChange={async (e) => {
-                            setIsImporting(true);
-                            await onImportCSV(e?.target?.files?.[0]);
-                            setIsImporting(false);
-                            if (fileInputRef.current) fileInputRef.current.value = "";
-                        }}
-                        disabled={isImporting}
-                    />
-                </label>
-
-                <button
-                    type="button"
-                    onClick={async () => {
-                        setIsClearing(true);
-                        await onClearTransactions();
-                        setIsClearing(false);
-                    }}
-                    disabled={isClearing}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-900 bg-rose-950/25 px-4 py-3 text-sm font-semibold text-rose-400 hover:bg-rose-950/50 transition-all disabled:opacity-50"
-                >
-                    {isClearing ? (
-                        <>
-                            <Loader2 className="h-4 w-4 animate-spin" /> Clearing...
-                        </>
-                    ) : (
-                        <>
-                            <Trash className="h-4 w-4" /> Clear All Transactions
-                        </>
-                    )}
-                </button>
-            </div>
-
-            <div className="rounded-xl bg-slate-950 p-4 border border-slate-900">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                    CSV fields
-                </h4>
-                <ul className="text-xs text-slate-400 leading-normal">
-                    <li>
-                        • <code className="font-bold">symbol</code>
-                    </li>
-                    <li>
-                        • <code className="font-bold">type</code> (BUY/SELL)
-                    </li>
-                    <li>
-                        • <code className="font-bold">quantity</code>
-                    </li>
-                    <li>
-                        • <code className="font-bold">pricePerShare</code>
-                    </li>
-                    <li>
-                        • <code className="font-bold italic">currency</code> (optional)
-                    </li>
-                    <li>
-                        • <code className="font-bold italic">transactionDate</code> (optional)
-                    </li>
-                </ul>
-            </div>
-        </div>
     );
 }
