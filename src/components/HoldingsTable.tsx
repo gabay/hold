@@ -22,7 +22,8 @@ export default function HoldingsTable({
 }: HoldingsTableProps) {
     return (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 shadow-md overflow-hidden">
-            <h3 className="text-lg font-bold text-slate-100 mb-6">Current Holdings</h3>
+            <h3 className="text-lg font-bold text-slate-100">Current Holdings</h3>
+            <div className="text-sm text-slate-400 mb-4">select a holding to see its valuation in the chart</div>
 
             {loading ? (
                 <div className="space-y-3">

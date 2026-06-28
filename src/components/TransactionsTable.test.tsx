@@ -41,7 +41,7 @@ describe("TransactionsTable", () => {
 
     it("renders without crashing", () => {
         render(<TransactionsTable {...mockProps} />);
-        expect(screen.getByText("Activity History")).toBeInTheDocument();
+        expect(screen.getByText("Transactions")).toBeInTheDocument();
     });
 
     it("shows loading skeleton when loading", () => {

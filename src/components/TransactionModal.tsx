@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
-import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
+import { CURRENCIES } from "@/lib/currencies";
 import { getDate, getDateString } from "@/lib/util";
 import { Transaction } from "@prisma/client";
 import { SearchAssetResult } from "@/lib/finance";
@@ -140,7 +140,7 @@ export default function TransactionModal({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (formCurrency && !SUPPORTED_CURRENCIES[formCurrency]) {
+        if (formCurrency && !CURRENCIES[formCurrency]) {
             setError(
                 `Unsupported currency "${formCurrency}". Please use a standard currency code.`,
             );
@@ -336,14 +336,14 @@ export default function TransactionModal({
                                     const currency = e.target.value.toUpperCase().trim();
                                     setFormCurrency(currency);
                                     setError(
-                                        currency.length < 3 || SUPPORTED_CURRENCIES[currency]
+                                        currency.length < 3 || CURRENCIES[currency]
                                             ? null
                                             : `Unsupported currency "${currency}".`,
                                     );
                                 }}
                                 onBlur={() =>
                                     setError(
-                                        !formCurrency || SUPPORTED_CURRENCIES[formCurrency]
+                                        !formCurrency || CURRENCIES[formCurrency]
                                             ? null
                                             : `Unsupported currency "${formCurrency}".`,
                                     )

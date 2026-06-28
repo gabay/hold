@@ -367,51 +367,44 @@ function Header({
                         <span className="text-xl font-bold bg-linear-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
                             Hold
                         </span>
+                        <div className="text-left hidden sm:block p-2">
+                            <p className="text-sm font-semibold text-slate-200">{user.name}</p>
+                            <p className="text-xs text-slate-400">{user.email}</p>
+                        </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                        <div className="ml-2">
-                            <PortfolioSelect
-                                portfolios={portfolios}
-                                portfolioId={portfolioId}
-                                onSelect={onSelectPortfolio}
-                                onCreate={onAddPortfolio}
-                                onRename={onRenamePortfolio}
-                            />
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <CurrencySearchBox
-                                value={displayCurrency}
-                                onChange={onDisplayCurrencyChange}
-                            />
-                        </div>
+                    <div className="flex items-center gap-1">
+                        <PortfolioSelect
+                            portfolios={portfolios}
+                            portfolioId={portfolioId}
+                            onSelect={onSelectPortfolio}
+                            onCreate={onAddPortfolio}
+                            onRename={onRenamePortfolio}
+                        />
 
-                        <div className="h-6 w-px bg-slate-800"></div>
+                        <CurrencySearchBox
+                            value={displayCurrency}
+                            onChange={onDisplayCurrencyChange}
+                        />
 
-                        <div className="flex items-center gap-3">
-                            <button
-                                onClick={onTogglePrivacy}
-                                className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-all"
-                                title={privacyMode ? "Show Balances" : "Hide Balances"}
-                            >
-                                {privacyMode ? (
-                                    <EyeOff className="h-5 w-5" />
-                                ) : (
-                                    <Eye className="h-5 w-5" />
-                                )}
-                            </button>
-                            <div className="text-right hidden sm:block">
-                                <p className="text-sm font-semibold text-slate-200">{user.name}</p>
-                                <p className="text-xs text-slate-400">{user.email}</p>
-                            </div>
-                            <button
-                                onClick={() => signOut()}
-                                className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-all"
-                                title="Logout"
-                            >
-                                <LogOut className="h-5 w-5" />
-                            </button>
-                        </div>
+                        <button
+                            onClick={onTogglePrivacy}
+                            className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-all"
+                            title={privacyMode ? "Show Balances" : "Hide Balances"}
+                        >
+                            {privacyMode ? (
+                                <EyeOff className="h-5 w-5" />
+                            ) : (
+                                <Eye className="h-5 w-5" />
+                            )}
+                        </button>
+                        <button
+                            onClick={() => signOut()}
+                            className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-all"
+                            title="Logout"
+                        >
+                            <LogOut className="h-5 w-5" />
+                        </button>
                     </div>
                 </div>
             </div>
@@ -521,7 +514,7 @@ function QuickActionsPanel({
 
     return (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 shadow-md flex flex-col space-y-6">
-            <h3 className="text-lg font-bold text-slate-100">Manage Activities</h3>
+            <h3 className="text-lg font-bold text-slate-100">Manage Transactions</h3>
 
             <div className="flex flex-col gap-3">
                 <button
@@ -539,7 +532,7 @@ function QuickActionsPanel({
                     <Download className="h-4 w-4" /> Export Transactions
                 </button>
 
-                <label className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition-all cursor-pointer">
+                <label className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition-all">
                     {isImporting ? (
                         <>
                             <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> Importing...

@@ -69,7 +69,7 @@ export default function PortfolioSelect({
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 z-50 mt-2 w-64 origin-top-right rounded-lg bg-slate-950 shadow-xl ring-1 ring-black ring-opacity-5 focus:outline-none flex flex-col">
+                <div className="absolute right-0 z-50 mt-2 w-60 origin-top-right rounded-lg bg-slate-950 shadow-xl ring-1 ring-black ring-opacity-5 focus:outline-none flex flex-col">
                     {mode === "list" ? (
                         <>
                             <div className="overflow-y-auto py-1 max-h-64">
@@ -105,7 +105,7 @@ export default function PortfolioSelect({
                                     className="w-full text-left px-4 py-2 text-sm flex items-center gap-2 text-slate-300 hover:bg-slate-900 transition-colors disabled:opacity-40"
                                 >
                                     <Pencil className="h-4 w-4" />
-                                    Rename current
+                                    Rename portfolio
                                 </button>
                                 <button
                                     type="button"

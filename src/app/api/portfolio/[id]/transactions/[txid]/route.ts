@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { db, checkUserPortfolioTransaction } from "@/lib/db";
 import { getAssetInfo } from "@/lib/finance";
-import { SUPPORTED_CURRENCIES } from "@/lib/currencies";
+import { CURRENCIES } from "@/lib/currencies";
 import { NextRequest, NextResponse } from "next/server";
 import { getDate } from "@/lib/util";
 
@@ -34,7 +34,7 @@ export async function PUT(
             );
         }
 
-        if (currency && !SUPPORTED_CURRENCIES[currency]) {
+        if (currency && !CURRENCIES[currency]) {
             return NextResponse.json(
                 { error: `Unsupported currency "${currency}"` },
                 { status: 400 },

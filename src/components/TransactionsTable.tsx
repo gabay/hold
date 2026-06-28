@@ -22,7 +22,7 @@ export default function TransactionsTable({
     return (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 shadow-md overflow-hidden">
             <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-bold text-slate-100">Activity History</h3>
+                <h3 className="text-lg font-bold text-slate-100">Transactions</h3>
             </div>
 
             {loading ? (

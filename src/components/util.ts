@@ -7,9 +7,11 @@ export function localStorageGet(key: string): string | null {
     return null;
 }
 
+const LOCALE = process.env.LOCALE || "en-US";
+
 export function formatCurrency(val: number, currency: string): string {
     try {
-        return new Intl.NumberFormat("en-US", {
+        return new Intl.NumberFormat(LOCALE, {
             style: "currency",
             currency: currency,
             maximumFractionDigits: 2,
