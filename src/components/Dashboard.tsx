@@ -435,7 +435,10 @@ function Header({
                             )}
                         </button>
                         <button
-                            onClick={() => signOut()}
+                            onClick={() => {
+                                localStorage.removeItem("hold_portfolioId");
+                                signOut();
+                            }}
                             className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-all"
                             title="Logout"
                         >
