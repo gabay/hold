@@ -218,15 +218,20 @@ export async function convertCurrency(
     return amount * (await getExchangeRate(baseCurrency, toCurrency, date));
 }
 
-export function getPrice(assetInfo: AssetInfo, date: DateInt): number {
+export function getValueAroundDate(
+    values: Map<DateInt, number> | undefined,
+    date: DateInt,
+): number | undefined {
+    if (values === undefined) return undefined;
+
     // look up 4 days back, or 2 days forward.
     for (const delta of [0, -1, -2, -3, -4, 1, 2]) {
-        const price = assetInfo.prices.get(addDays(date, delta));
-        if (price) {
+        const price = values.get(addDays(date, delta));
+        if (price !== undefined) {
             return price;
         }
     }
-    return 0;
+    return undefined;
 }
 
 /**
@@ -238,11 +243,7 @@ export async function getExchangeRate(
     date: Date = getDate(),
 ): Promise<number> {
     const exchangeRates = await getExchangeRates(baseCurrency, targetCurrency, date);
-    const dateInt = getDateInt(date);
-    const rate =
-        exchangeRates?.rates.get(dateInt) ||
-        exchangeRates?.rates.get(addDays(dateInt, -1)) ||
-        exchangeRates?.rates.get(addDays(dateInt, 1));
+    const rate = getValueAroundDate(exchangeRates?.rates, getDateInt(date));
     if (rate === undefined)
         throw new Error(`No exchange rate for ${baseCurrency} -> ${targetCurrency} on ${date}`);
     return rate;

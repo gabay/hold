@@ -4,8 +4,7 @@ import {
     convertCurrency,
     getExchangeRate,
     getExchangeRates,
-    getPrice,
-    type AssetInfo,
+    getValueAroundDate,
 } from "../lib/finance";
 import { addDays, getDate, getDateInt, getDateString } from "../lib/util";
 
@@ -42,98 +41,64 @@ describe("Finance Module", () => {
         vi.mocked(db).exchangeRate.findMany.mockReset().mockResolvedValue([]);
     });
 
-    describe("getPrice", () => {
+    describe("getValueAroundDate", () => {
         it("should return exact price when available", () => {
             const date = getDateInt();
-            const assetInfo: AssetInfo = {
-                symbol: "AAPL",
-                name: "Apple",
-                currency: "USD",
-                price: 150,
-                fromDate: getDate(),
-                prices: new Map([[date, 150]]),
-            };
-
-            expect(getPrice(assetInfo, date)).toBe(150);
+            const values = new Map([[date, 150]]);
+            expect(getValueAroundDate(values, date)).toBe(150);
         });
 
         it("should look back up to 4 days for price", () => {
             const baseDate = getDateInt();
-            const assetInfo: AssetInfo = {
-                symbol: "AAPL",
-                name: "Apple",
-                currency: "USD",
-                price: 150,
-                fromDate: getDate(),
-                prices: new Map([[addDays(baseDate, -2), 148]]),
-            };
-
-            expect(getPrice(assetInfo, baseDate)).toBe(148);
+            const values = new Map([[addDays(baseDate, -4), 148]]);
+            expect(getValueAroundDate(values, baseDate)).toBe(148);
         });
 
         it("should look forward up to 2 days for price", () => {
             const baseDate = getDateInt();
-            const assetInfo: AssetInfo = {
-                symbol: "AAPL",
-                name: "Apple",
-                currency: "USD",
-                price: 150,
-                fromDate: getDate(),
-                prices: new Map([[addDays(baseDate, 1), 151]]),
-            };
-
-            expect(getPrice(assetInfo, baseDate)).toBe(151);
+            const values = new Map([[addDays(baseDate, 2), 151]]);
+            expect(getValueAroundDate(values, baseDate)).toBe(151);
         });
 
-        it("should return 0 when no price found", () => {
-            const baseDate = getDateInt();
-            const assetInfo: AssetInfo = {
-                symbol: "AAPL",
-                name: "Apple",
-                currency: "USD",
-                price: 150,
-                fromDate: getDate(),
-                prices: new Map(),
-            };
+        it("should return undefined when no prices provided", () => {
+            expect(getValueAroundDate(undefined, getDateInt())).toBe(undefined);
+        });
 
-            expect(getPrice(assetInfo, baseDate)).toBe(0);
+        it("should return undefined when no price found", () => {
+            expect(getValueAroundDate(new Map(), getDateInt())).toBe(undefined);
+        });
+
+        it("should return undefined when no value in range", () => {
+            const baseDate = getDateInt();
+            const values = new Map([
+                [addDays(baseDate, -5), 148],
+                [addDays(baseDate, 3), 152],
+            ]);
+
+            // Should return undefined when no value in range
+            expect(getValueAroundDate(values, baseDate)).toBe(undefined);
         });
 
         it("should prioritize exact date over nearby dates", () => {
             const baseDate = getDateInt();
-            const prices = new Map([
+            const values = new Map([
                 [baseDate, 150],
                 [addDays(baseDate, -1), 149],
                 [addDays(baseDate, 1), 151],
             ]);
-            const assetInfo: AssetInfo = {
-                symbol: "AAPL",
-                name: "Apple",
-                currency: "USD",
-                price: 150,
-                fromDate: getDate(),
-                prices,
-            };
 
-            expect(getPrice(assetInfo, baseDate)).toBe(150);
+            expect(getValueAroundDate(values, baseDate)).toBe(150);
         });
 
         it("should respect search order: back 4 days, then forward 2 days", () => {
             const baseDate = getDateInt();
-            const assetInfo: AssetInfo = {
-                symbol: "AAPL",
-                name: "Apple",
-                currency: "USD",
-                price: 150,
-                fromDate: getDate(),
-                prices: new Map([
-                    [addDays(baseDate, -3), 148],
-                    [addDays(baseDate, 2), 152],
-                ]),
-            };
+            const values = new Map([
+                [addDays(baseDate, -4), 148],
+                [addDays(baseDate, 1), 152],
+            ]);
 
             // Should find -3 before finding +2
-            expect(getPrice(assetInfo, baseDate)).toBe(148);
+            expect(getValueAroundDate(values, baseDate)).toBe(148);
         });
     });
 

@@ -1,6 +1,6 @@
 import { Transaction } from "@prisma/client";
 import { db } from "./db";
-import { getAssetInfo, getExchangeRate, AssetInfo, getPrice } from "./finance";
+import { getAssetInfo, getExchangeRate, AssetInfo, getValueAroundDate } from "./finance";
 import { DateInt, getDateInt, getDateString, getDate } from "./util";
 
 export interface PortfolioData {
@@ -264,9 +264,14 @@ export class AssetDataCalculator {
 
     getChartDataPoint(date: Date): ChartDataPoint {
         const dateInt = getDateInt(date);
+        let value = getValueAroundDate(this.assetInfo.prices, dateInt);
+        if (value === undefined) {
+            console.error(`No price for ${this.assetInfo.symbol} on ${date}`);
+            value = 0;
+        }
         return {
             date: getDateString(date),
-            valuation: getPrice(this.assetInfo, dateInt) * this.getQuantity(dateInt),
+            valuation: value * this.getQuantity(dateInt),
             invested: this.getCost(dateInt),
             realized: this.getRealized(dateInt),
         };

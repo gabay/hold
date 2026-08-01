@@ -8,6 +8,7 @@ interface ManageTransactionsPanelProps {
     onExportCSV: () => void;
     onImportCSV: (file: File | undefined) => void;
     onClearTransactions: () => void;
+    onClearCache: () => void;
 }
 
 /**
@@ -18,9 +19,11 @@ export default function ManageTransactionsPanel({
     onExportCSV,
     onImportCSV,
     onClearTransactions,
+    onClearCache,
 }: ManageTransactionsPanelProps) {
     const [isImporting, setIsImporting] = useState(false);
     const [isClearing, setIsClearing] = useState(false);
+    const [isClearingCache, setIsClearingCache] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     return (
@@ -45,8 +48,7 @@ export default function ManageTransactionsPanel({
                     <label className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition-all">
                         {isImporting ? (
                             <>
-                                <Loader2 className="h-4 w-4 animate-spin text-slate-400" />{" "}
-                                Importing...
+                                <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> Importing...
                             </>
                         ) : (
                             <>
@@ -86,6 +88,27 @@ export default function ManageTransactionsPanel({
                     ) : (
                         <>
                             <Trash className="h-4 w-4" /> Clear All Transactions
+                        </>
+                    )}
+                </button>
+
+                <button
+                    type="button"
+                    onClick={async () => {
+                        setIsClearingCache(true);
+                        await onClearCache();
+                        setIsClearingCache(false);
+                    }}
+                    disabled={isClearingCache}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-900 bg-rose-950/25 px-4 py-3 text-sm font-semibold text-rose-400 hover:bg-rose-950/50 transition-all disabled:opacity-50"
+                >
+                    {isClearingCache ? (
+                        <>
+                            <Loader2 className="h-4 w-4 animate-spin" /> Clearing...
+                        </>
+                    ) : (
+                        <>
+                            <Trash className="h-4 w-4" /> Clear Stock & Exchange Rates Cache
                         </>
                     )}
                 </button>

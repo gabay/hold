@@ -11,16 +11,7 @@ import TransactionsTable from "@/components/TransactionsTable";
 import { formatCurrency, localStorageGet } from "@/components/util";
 import { ChartDataPoint, PortfolioData, PortfolioSummary } from "@/lib/portfolio";
 import { Transaction } from "@prisma/client";
-import {
-    ArrowLeftRight,
-    DollarSign,
-    Eye,
-    EyeOff,
-    HandCoins,
-    LogOut,
-    Percent,
-    Wallet,
-} from "lucide-react";
+import { Plus, DollarSign, Eye, EyeOff, HandCoins, LogOut, Percent, Wallet } from "lucide-react";
 import { User } from "next-auth";
 import { signOut } from "next-auth/react";
 import { useCallback, useEffect, useState } from "react";
@@ -218,6 +209,25 @@ export default function Dashboard({ user }: DashboardProps) {
         }
     };
 
+    const handleClearCache = async () => {
+        const confirmClear = window.confirm(
+            "Are you sure you want to clear the stock data and exchange rate caches? This action is permanent and cannot be undone.",
+        );
+        if (!confirmClear) return;
+
+        setErrorMessage(null);
+        try {
+            const res = await fetch("/api/cache", {
+                method: "DELETE",
+            });
+            if (!res.ok) throw new Error("Failed to clear cache");
+
+            window.location.reload();
+        } catch (err: unknown) {
+            setErrorMessage((err as Error).message);
+        }
+    };
+
     // UI
 
     const selectedAsset = summary?.assets.find((a) => a.symbol === selectedSymbol);
@@ -315,6 +325,7 @@ export default function Dashboard({ user }: DashboardProps) {
                             onExportCSV={handleExportCSV}
                             onImportCSV={handleImportCSV}
                             onClearTransactions={handleClearTransactions}
+                            onClearCache={handleClearCache}
                         />
                     }
                 />
@@ -410,7 +421,7 @@ function Header({
                             className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-all"
                             title="Manage Transactions"
                         >
-                            <ArrowLeftRight className="h-5 w-5" />
+                            <Plus className="h-5 w-5" />
                         </button>
                         <button
                             onClick={onTogglePrivacy}

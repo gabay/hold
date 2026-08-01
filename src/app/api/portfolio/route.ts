@@ -18,7 +18,7 @@ export async function GET(_req: NextRequest) {
     if (portfolios.length === 0) {
         const defaultPortfolio = await db.portfolio.create({
             data: {
-                name: "My Portfolio",
+                name: "Portfolio",
                 userId,
             },
         });

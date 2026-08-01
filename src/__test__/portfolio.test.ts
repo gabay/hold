@@ -19,11 +19,11 @@ vi.mock("../lib/db", () => ({
 vi.mock("../lib/finance", () => ({
     getAssetInfo: vi.fn(),
     getExchangeRate: vi.fn(),
-    getPrice: vi.fn(),
+    getValueAroundDate: vi.fn(),
 }));
 
 import { db } from "../lib/db";
-import { getAssetInfo, getPrice } from "../lib/finance";
+import { getAssetInfo, getValueAroundDate } from "../lib/finance";
 
 describe("Portfolio Module", () => {
     beforeEach(() => {
@@ -309,7 +309,7 @@ describe("Portfolio Module", () => {
                     prices: new Map([[getDateInt(baseDate), 150]]),
                 });
 
-                const mockGetPrice = vi.mocked(getPrice);
+                const mockGetPrice = vi.mocked(getValueAroundDate);
                 mockGetPrice.mockReturnValue(150);
 
                 const calculator = new AssetDataCalculator(transactions, assetInfo);
@@ -326,12 +326,12 @@ describe("Portfolio Module", () => {
     describe("getPortfolioData", () => {
         const mockDb = vi.mocked(db);
         const mockGetAssetInfo = vi.mocked(getAssetInfo);
-        const mockGetPrice = vi.mocked(getPrice);
+        const mockGetPrice = vi.mocked(getValueAroundDate);
 
         const createMockPortfolio = () => ({
             id: "portfolio-1",
             userId: "user-1",
-            name: "My Portfolio",
+            name: "Portfolio",
             createdAt: new Date(),
             updatedAt: new Date(),
         });
@@ -399,7 +399,7 @@ describe("Portfolio Module", () => {
             const result = await getPortfolioData("portfolio-1", "USD");
 
             expect(result.portfolioId).toBe("portfolio-1");
-            expect(result.name).toBe("My Portfolio");
+            expect(result.name).toBe("Portfolio");
             expect(result.summary.assets).toHaveLength(2);
             expect(result.summary.currency).toBe("USD");
         });
