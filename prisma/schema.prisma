@@ -86,3 +86,27 @@ model Transaction {
     createdAt       DateTime  @default(now())
     updatedAt       DateTime  @updatedAt
 }
+
+// Cached daily close price (and split/dividend events) per symbol, so
+// subsequent fetches only need to top up the last few days from Yahoo.
+model StockPrice {
+    symbol   String
+    date     DateTime
+    price    Float
+    dividend Float?
+    split    Float?
+
+    @@id([symbol, date])
+}
+
+// Cached daily exchange rate. Stored once per currency pair with baseCurrency
+// and targetCurrency alphabetically sorted; the reverse rate is derived in
+// code (1 / rate) rather than stored again.
+model ExchangeRate {
+    baseCurrency   String
+    targetCurrency String
+    date           DateTime
+    rate           Float
+
+    @@id([baseCurrency, targetCurrency, date])
+}

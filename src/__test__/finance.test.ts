@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
     cache,
     convertCurrency,
@@ -11,10 +11,35 @@ import { addDays, getDate, getDateInt, getDateString } from "../lib/util";
 
 global.fetch = vi.fn();
 
+vi.mock("../lib/db", () => ({
+    db: {
+        stockPrice: {
+            findMany: vi.fn().mockResolvedValue([]),
+            findFirst: vi.fn().mockResolvedValue(null),
+            upsert: vi.fn().mockResolvedValue(undefined),
+        },
+        exchangeRate: {
+            findMany: vi.fn().mockResolvedValue([]),
+            findFirst: vi.fn().mockResolvedValue(null),
+            upsert: vi.fn().mockResolvedValue(undefined),
+        },
+        $transaction: vi.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
+    },
+}));
+
+import { db } from "../lib/db";
+
 describe("Finance Module", () => {
     beforeEach(() => {
         cache.flushAll();
         vi.clearAllMocks();
+    });
+
+    // Some tests override the default (empty) db mock implementations; restore
+    // them so that override doesn't leak into unrelated tests.
+    afterEach(() => {
+        vi.mocked(db).exchangeRate.findFirst.mockReset().mockResolvedValue(null);
+        vi.mocked(db).exchangeRate.findMany.mockReset().mockResolvedValue([]);
     });
 
     describe("getPrice", () => {
@@ -128,7 +153,7 @@ describe("Finance Module", () => {
                 json: async () => [{ date: dateStr, rate: 0.92 }],
             } as Response);
 
-            const result = await convertCurrency(100, "USD", "EUR", date);
+            const result = await convertCurrency(100, "EUR", "USD", date);
             expect(result).toBeCloseTo(92, 1);
         });
     });
@@ -144,7 +169,7 @@ describe("Finance Module", () => {
                 json: async () => [{ date: dateStr, rate: 0.92 }],
             } as Response);
 
-            const rate = await getExchangeRate("USD", "EUR", date);
+            const rate = await getExchangeRate("EUR", "USD", date);
             expect(rate).toBeCloseTo(0.92, 2);
         });
 
@@ -158,8 +183,8 @@ describe("Finance Module", () => {
                 json: async () => [{ date: dateStr, rate: 0.92 }],
             } as Response);
 
-            const rate1 = await getExchangeRate("USD", "EUR", date);
-            const rate2 = await getExchangeRate("USD", "EUR", date);
+            const rate1 = await getExchangeRate("EUR", "USD", date);
+            const rate2 = await getExchangeRate("EUR", "USD", date);
 
             expect(rate1).toBeCloseTo(rate2, 2);
             expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -174,7 +199,7 @@ describe("Finance Module", () => {
                 json: async () => [],
             } as Response);
 
-            await expect(getExchangeRate("USD", "EUR", date)).rejects.toThrow("No exchange rate");
+            await expect(getExchangeRate("EUR", "USD", date)).rejects.toThrow("No exchange rate");
         });
 
         it("should look back 1 day if current day rate not found", async () => {
@@ -188,7 +213,7 @@ describe("Finance Module", () => {
                 json: async () => [{ date: prevDateStr, rate: 0.92 }],
             } as Response);
 
-            const rate = await getExchangeRate("USD", "EUR", date);
+            const rate = await getExchangeRate("EUR", "USD", date);
             expect(rate).toBeCloseTo(0.92, 2);
         });
     });
@@ -232,7 +257,7 @@ describe("Finance Module", () => {
             expect(mockFetch).toHaveBeenCalledTimes(1);
         });
 
-        it("should use reverse cache when available", async () => {
+        it("should derive the opposite direction from cache without refetching", async () => {
             const mockFetch = vi.mocked(global.fetch);
             const date = getDate();
             const dateStr = getDateString(date);
@@ -242,12 +267,56 @@ describe("Finance Module", () => {
                 json: async () => [{ date: dateStr, rate: 0.92 }],
             } as Response);
 
+            // EUR sorts before USD, so USD->EUR is fetched/cached as EUR->USD...
             await getExchangeRates("USD", "EUR", date);
+            // ...and this call reuses that same cache entry, just flipped.
             const reversed = await getExchangeRates("EUR", "USD", date);
 
             expect(reversed?.baseCurrency).toBe("EUR");
-            expect(reversed?.rates.get(getDateInt(date))).toBeCloseTo(1 / 0.92, 2);
+            expect(reversed?.rates.get(getDateInt(date))).toBeCloseTo(0.92, 2);
             expect(mockFetch).toHaveBeenCalledTimes(1);
+        });
+
+        it("should always store rates with currencies in alphabetical order, and look up only that direction", async () => {
+            const mockFetch = vi.mocked(global.fetch);
+            const date = getDate();
+            const mockDb = vi.mocked(db);
+
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => [{ date: getDateString(date), rate: 0.92 }],
+            } as Response);
+
+            // USD > EUR alphabetically, so even though USD is requested as the
+            // base, it must be fetched and stored as EUR -> USD.
+            const result = await getExchangeRates("USD", "EUR", date);
+
+            expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining("base=EUR&quotes=USD"));
+            expect(mockDb.exchangeRate.upsert).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    create: expect.objectContaining({ baseCurrency: "EUR", targetCurrency: "USD" }),
+                }),
+            );
+            expect(result?.baseCurrency).toBe("USD");
+            expect(result?.rates.get(getDateInt(date))).toBeCloseTo(1 / 0.92, 5);
+
+            // A fresh (uncached) lookup in the canonical direction only needs to
+            // check that one direction, not both.
+            cache.flushAll();
+            mockDb.exchangeRate.findFirst.mockClear();
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => [{ date: getDateString(date), rate: 0.92 }],
+            } as Response);
+
+            await getExchangeRates("EUR", "USD", date);
+
+            expect(mockDb.exchangeRate.findFirst).toHaveBeenCalledTimes(1);
+            expect(mockDb.exchangeRate.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ baseCurrency: "EUR", targetCurrency: "USD" }),
+                }),
+            );
         });
 
         it("should handle API errors gracefully", async () => {

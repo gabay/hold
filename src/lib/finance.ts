@@ -5,6 +5,27 @@ export const cache = new NodeCache({ stdTTL: 300, checkperiod: 300 });
 
 import { getDateString as getDateString, getDateInt, DateInt, addDays, getDate } from "./util";
 import { SearchQuoteYahoo } from "yahoo-finance2/modules/search";
+import { db } from "./db";
+
+// Once a symbol/currency-pair has history stored, only re-fetch the last few
+// days instead of the full history requested by the caller.
+const FETCH_BUFFER_DAYS = 2;
+
+// Given the latest date already stored (if any), returns how far back a
+// refresh fetch needs to go: a few days before that, or fromDate if nothing
+// (or nothing recent enough) is stored yet.
+function bufferedFetchStart(fromDate: Date, latestStored?: Date): Date {
+    if (!latestStored) return fromDate;
+    const bufferedStart = getDate(addDays(getDateInt(latestStored), -FETCH_BUFFER_DAYS));
+    return bufferedStart > fromDate ? bufferedStart : fromDate;
+}
+
+// Overlays `overrides` onto `base`, without mutating either.
+function mergeMaps<K, V>(base: Map<K, V>, overrides: Map<K, V>): Map<K, V> {
+    const merged = new Map(base);
+    for (const [key, value] of overrides) merged.set(key, value);
+    return merged;
+}
 
 export interface AssetInfo {
     symbol: string;
@@ -44,19 +65,80 @@ export async function getAssetInfo(
         return await convertAssetInfoCurrency(cached, currency);
 
     try {
-        const result = await yahooFinance.chart(symbol.toUpperCase(), {
-            period1: getDateString(fromDate),
+        const upperSymbol = symbol.toUpperCase();
+
+        // Serve as much as we can from what's already stored, and only ask
+        // Yahoo for the last few days on top of it.
+        const [existingRows, latest] = await Promise.all([
+            db.stockPrice.findMany({
+                where: { symbol: upperSymbol, date: { gte: fromDate } },
+                orderBy: { date: "asc" },
+            }),
+            db.stockPrice.findFirst({
+                where: { symbol: upperSymbol },
+                orderBy: { date: "desc" },
+            }),
+        ]);
+
+        const result = await yahooFinance.chart(upperSymbol, {
+            period1: getDateString(bufferedFetchStart(fromDate, latest?.date)),
             interval: "1d",
         });
         if (!result) {
             throw new Error(`Symbol ${symbol} not found`);
         }
 
-        const prices = new Map(
+        const freshPrices = new Map(
             result.quotes.filter((q) => q.close).map((q) => [getDateInt(q.date), q.close!]),
         );
-        const splits = new Map(
+        const freshSplits = new Map(
             result.events?.splits?.map((s) => [getDateInt(s.date), s.numerator / s.denominator]),
+        );
+        const freshDividends = new Map(
+            result.events?.dividends?.map((d) => [getDateInt(d.date), d.amount]),
+        );
+
+        // Persist raw (unadjusted) prices for the freshly fetched days so future
+        // calls only need to top up recent history instead of refetching it all.
+        await db.$transaction(
+            Array.from(freshPrices.entries()).map(([dateInt, price]) =>
+                db.stockPrice.upsert({
+                    where: { symbol_date: { symbol: upperSymbol, date: new Date(dateInt) } },
+                    create: {
+                        symbol: upperSymbol,
+                        date: new Date(dateInt),
+                        price,
+                        dividend: freshDividends.get(dateInt),
+                        split: freshSplits.get(dateInt),
+                    },
+                    update: {
+                        price,
+                        dividend: freshDividends.get(dateInt),
+                        split: freshSplits.get(dateInt),
+                    },
+                }),
+            ),
+        );
+
+        const prices = mergeMaps(
+            new Map(existingRows.map((r) => [getDateInt(r.date), r.price])),
+            freshPrices,
+        );
+        const splits = mergeMaps(
+            new Map(
+                existingRows
+                    .filter((r) => r.split != null)
+                    .map((r) => [getDateInt(r.date), r.split!]),
+            ),
+            freshSplits,
+        );
+        const dividends = mergeMaps(
+            new Map(
+                existingRows
+                    .filter((r) => r.dividend != null)
+                    .map((r) => [getDateInt(r.date), r.dividend!]),
+            ),
+            freshDividends,
         );
 
         const assetInfo = {
@@ -66,10 +148,8 @@ export async function getAssetInfo(
             price: result.meta.regularMarketPrice || 0,
             fromDate: fromDate,
             prices: adjustPreSplitPrices(prices, splits),
-            dividends: new Map(
-                result.events?.dividends?.map((d) => [getDateInt(d.date), d.amount]),
-            ),
-            splits: splits,
+            dividends,
+            splits,
         };
         cache.set(cache_key, assetInfo);
         return await convertAssetInfoCurrency(assetInfo, currency);
@@ -168,6 +248,18 @@ export async function getExchangeRate(
     return rate;
 }
 
+// Rates are always stored with the alphabetically-first currency as the
+// base, so only one direction ever needs to be looked up or fetched. The
+// opposite direction is derived in memory (1 / rate).
+function canonicalPair(
+    currencyA: string,
+    currencyB: string,
+): { base: string; target: string; flipped: boolean } {
+    return currencyA <= currencyB
+        ? { base: currencyA, target: currencyB, flipped: false }
+        : { base: currencyB, target: currencyA, flipped: true };
+}
+
 /**
  * Gets exchange rate on a specific date, caching in memory
  */
@@ -181,21 +273,29 @@ export async function getExchangeRates(
         return undefined;
     }
 
-    // lookup cache (and reverse cache)
-    const cache_key = `xrate-${baseCurrency}-${targetCurrency}`;
+    const { base, target, flipped } = canonicalPair(
+        baseCurrency.toUpperCase(),
+        targetCurrency.toUpperCase(),
+    );
+
+    const cache_key = `xrate-${base}-${target}`;
     const cached = cache.get<ExchangeRates>(cache_key);
-    if (cached && cached.fromDate <= fromDate) return cached;
+    if (cached && cached.fromDate <= fromDate)
+        return flipped ? reverseExchangeRates(cached) : cached;
 
-    const reverse_cache_key = `xrate-${targetCurrency}-${baseCurrency}`;
-    const reverse_cached = cache.get<ExchangeRates>(reverse_cache_key);
-    if (reverse_cached && reverse_cached.fromDate <= fromDate)
-        return reverseExchangeRates(reverse_cached);
-
-    // Fetch from Frankfurter API
     try {
-        const dateStr = getDateString(fromDate);
-        const base = baseCurrency.toUpperCase();
-        const target = targetCurrency.toUpperCase();
+        const [existingRows, latest] = await Promise.all([
+            db.exchangeRate.findMany({
+                where: { baseCurrency: base, targetCurrency: target, date: { gte: fromDate } },
+                orderBy: { date: "asc" },
+            }),
+            db.exchangeRate.findFirst({
+                where: { baseCurrency: base, targetCurrency: target },
+                orderBy: { date: "desc" },
+            }),
+        ]);
+
+        const dateStr = getDateString(bufferedFetchStart(fromDate, latest?.date));
         const url = `https://api.frankfurter.dev/v2/rates?from=${dateStr}&base=${base}&quotes=${target}`;
 
         const response = await fetch(url);
@@ -203,14 +303,42 @@ export async function getExchangeRates(
             throw new Error(`Failed to fetch rate: ${response.statusText}`);
         }
         const data = (await response.json()) as [{ date: string; rate: number }];
-        const exchangeRates = {
-            baseCurrency,
-            targetCurrency,
+        const freshRates = new Map(data.map(({ date, rate }) => [getDateInt(getDate(date)), rate]));
+
+        await db.$transaction(
+            Array.from(freshRates.entries()).map(([dateInt, rate]) =>
+                db.exchangeRate.upsert({
+                    where: {
+                        baseCurrency_targetCurrency_date: {
+                            baseCurrency: base,
+                            targetCurrency: target,
+                            date: new Date(dateInt),
+                        },
+                    },
+                    create: {
+                        baseCurrency: base,
+                        targetCurrency: target,
+                        date: new Date(dateInt),
+                        rate,
+                    },
+                    update: { rate },
+                }),
+            ),
+        );
+
+        const rates = mergeMaps(
+            new Map(existingRows.map((r) => [getDateInt(r.date), r.rate])),
+            freshRates,
+        );
+
+        const canonicalResult: ExchangeRates = {
+            baseCurrency: base,
+            targetCurrency: target,
             fromDate,
-            rates: new Map(data.map(({ date, rate }) => [getDateInt(getDate(date)), rate])),
+            rates,
         };
-        cache.set(cache_key, exchangeRates);
-        return exchangeRates;
+        cache.set(cache_key, canonicalResult);
+        return flipped ? reverseExchangeRates(canonicalResult) : canonicalResult;
     } catch (error) {
         console.error(
             `Error fetching exchange rates ${baseCurrency} -> ${targetCurrency} since ${fromDate.toISOString()}:`,
