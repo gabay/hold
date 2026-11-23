@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+:root {
+    --background: #0b1329; /* Dark blue-slate background */
+    --foreground: #f8fafc; /* Slate 50 */
+}
+
+@theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+}
+
+body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}

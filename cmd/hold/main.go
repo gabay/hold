@@ -16,6 +16,7 @@ import (
 	"github.com/gabay/hold/internal/finance"
 	"github.com/gabay/hold/internal/portfolio"
 	"github.com/gabay/hold/internal/server"
+	"github.com/gabay/hold/web"
 )
 
 func main() {
@@ -40,7 +41,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	handler := server.New(cfg, store, authSvc, financeSvc, portfolioSvc, nil)
+	staticFS, err := web.DistFS()
+	if err != nil {
+		slog.Error("load embedded frontend failed", "error", err)
+		os.Exit(1)
+	}
+
+	handler := server.New(cfg, store, authSvc, financeSvc, portfolioSvc, staticFS)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
