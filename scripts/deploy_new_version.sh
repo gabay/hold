@@ -19,14 +19,11 @@ fi
 # Docker - build
 IMAGE_NAME="gabay/hold"
 echo "* Build docker image"
-docker build -t $IMAGE_NAME .
-
-# Docker - tag & push
 TAGS="$MAJOR_VERSION $MINOR_VERSION $FULL_VERSION latest"
+
 for tag in $TAGS; do
     echo "* Tag & Push $IMAGE_NAME:$tag"
-    docker tag $IMAGE_NAME "$IMAGE_NAME:$tag"
-    docker push "$IMAGE_NAME:$tag"
+    docker buildx build --platform linux/amd64,linux/arm64 -t $IMAGE_NAME:$tag --push .
 done
 
 # Git - tag & push
