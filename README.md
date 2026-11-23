@@ -53,13 +53,13 @@ docker run -d \
 
 > [!IMPORTANT]
 > **Database Host Directory Permissions**:
-> The container runs as a non-root user (`node`, UID `1000`). Ensure your host directory `/absolute/path/to/db-folder` is writeable by UID `1000` or has appropriate read/write permissions.
+> The container runs as a non-root user (`hold`, UID `1000`). Ensure your host directory `/absolute/path/to/db-folder` is writeable by UID `1000` or has appropriate read/write permissions.
 
 ### 🐳 Using Docker Compose
 
 Create a hold app using Docker Compose:
 
-```docker-compose
+```yaml
 services:
   hold:
     container_name: hold
@@ -67,71 +67,83 @@ services:
     ports:
       - 3000:3000
     environment:
-        ALLOW_DEMO_LOGIN=true
-        AUTH_URL=http://localhost:3000
-        AUTH_SECRET="replace-this-message-with-64-byte-long-secret-password-right-now"
-        # when ready for production - fill and use these variables:
-        # AUTH_OIDC_ISSUER=???
-        # AUTH_OIDC_CLIENT_ID=???
-        # AUTH_OIDC_CLIENT_SECRET=???
-        # AUTH_OIDC_NAME=???
+      ALLOW_DEMO_LOGIN: "true"
+      AUTH_URL: http://localhost:3000
+      AUTH_SECRET: "replace-this-message-with-64-byte-long-secret-password-right-now"
+      # when ready for production - fill and use these variables:
+      # AUTH_OIDC_ISSUER: "https://AUTH_PROVIDER"
+      # AUTH_OIDC_CLIENT_ID: "AUTH_PROVIDER_CLIENT_ID"
+      # AUTH_OIDC_CLIENT_SECRET: "AUTH_PROVIDER_CLIENT_SECRET"
+      # AUTH_OIDC_NAME: "AUTH_PROVIDER_NAME"
     volumes:
       - ./hold/:/app/data/
 ```
+
+> [!NOTE]
+> **Upgrading from older Prisma-based versions**:
+> Hold now uses a Go backend with its own SQLite schema (`DATABASE_URL=/app/data/hold.db`). If you are upgrading from an older Next.js/Prisma deployment, export your transactions via **CSV Export** in the old version and import them via **CSV Import** into the new instance.
 
 ## 🚀 Running from source
 
 #### Prerequisites
 
-- **Node.js**: `v20.x` or higher
-- **Package Manager**: `pnpm`
+- **Go**: `1.26` or higher
+- **Node.js**: `v24.x` (or `v20.x`+) and **pnpm**
 
-#### 1. Installation
+#### 1. Install Frontend Dependencies & Build SPA
 
-Clone the repository and navigate to the root directory.
+Clone the repository and build the frontend assets (embedded into the Go binary via `go:embed`):
 
 ```bash
-pnpm install
+pnpm --dir web install
+pnpm --dir web build
 ```
 
 #### 2. Configure Environment Variables
 
-Create a `.env` file in the root of the project:
+Set environment variables (or export them in your shell):
 
 ```env
-# Connection string for SQLite database (resolved relative to prisma/ directory)
-DATABASE_URL="file:hold.db"
+# Path to SQLite database file (created and migrated automatically on startup)
+DATABASE_URL="./data/hold.db"
 
-# NextAuth secret key for encrypting session cookies (Generate with: `openssl rand -base64 32`)
+# Secret key for signing session cookies (Generate with: `openssl rand -base64 32`)
 AUTH_SECRET="replace-this-message-with-64-byte-long-secret-password-right-now"
 
-# Enable local credentials-based fallback login (set to "false" in production)
+# Public base URL used for OIDC redirects and cookie security
+AUTH_URL="http://localhost:3000"
+
+# Enable local demo login (set to "false" in production)
 ALLOW_DEMO_LOGIN=true
 
-# (Optional) OpenID Connect OIDC provider configuration
+# (Optional) OpenID Connect (OIDC) provider configuration
 # AUTH_OIDC_ISSUER="https://AUTH_PROVIDER"
 # AUTH_OIDC_CLIENT_ID="AUTH_PROVIDER_CLIENT_ID"
 # AUTH_OIDC_CLIENT_SECRET="AUTH_PROVIDER_CLIENT_SECRET"
 # AUTH_OIDC_NAME="AUTH_PROVIDER_NAME"
 ```
 
-#### 3. Initialize the Database
+#### 3. Run the Server
 
-Apply migrations to setup your SQLite database file. This will automatically create the `prisma/` folder and initialize `hold.db`:
-
-```bash
-npx prisma migrate dev
-```
-
-#### 4. Run the Development Server
-
-Start the Next.js development server:
+Start the Go server (database tables and migrations are applied automatically on startup):
 
 ```bash
-pnpm dev
+go run ./cmd/hold
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+#### 4. Frontend Hot-Reload Development Workflow
+
+For frontend development with Vite hot-reload, run the Go backend on port `3000` and the Vite dev server (which proxies `/api/*` requests to `http://localhost:3000`) in a second terminal:
+
+```bash
+# Terminal 1: Go API server
+ALLOW_DEMO_LOGIN=true go run ./cmd/hold
+
+# Terminal 2: Vite dev server
+pnpm --dir web dev
+```
 
 ---
 
@@ -180,11 +192,11 @@ OIDC is configured through the environment variables.
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: Next.js 16 (App Router, Client Components), Tailwind CSS v4, Recharts (Interactive Charts), Lucide React (Icons)
-- **Backend**: Next.js Route Handlers (API Routes)
-- **Database**: SQLite via Prisma ORM
-- **Authentication**: NextAuth.js (v5 Beta) - Support for OIDC and Mock Developer Login
-- **External APIs**: Yahoo Finance (Asset prices via `yahoo-finance2`), Frankfurter API (Exchange rates)
+- **Frontend**: React 19, Vite, TypeScript, Tailwind CSS v4, Recharts (Interactive Charts), Lucide React (Icons) — embedded in the Go binary via `go:embed`
+- **Backend**: Go `net/http` standard library server
+- **Database**: SQLite via `modernc.org/sqlite` (pure Go, zero-CGO)
+- **Authentication**: `coreos/go-oidc` + HMAC-signed HTTP-only session cookies (`go-jose`), with optional demo login
+- **External APIs**: Yahoo Finance (quotes, splits, dividends, search), Frankfurter API (exchange rates)
 
 ---
 
@@ -194,21 +206,22 @@ The following diagram illustrates how the application components interact:
 
 ```mermaid
 graph TD
-    User([User Browser]) -->|HTTPS| Frontend[Next.js Frontend UI]
-    Frontend -->|API Calls| Backend[Next.js API Routes]
+    User([User Browser]) -->|HTTPS| Server["Go HTTP Server (net/http)"]
 
-    subgraph Backend Services
-        Backend -->|Auth Session| NextAuth[NextAuth.js]
-        Backend -->|User Queries| Prisma[Prisma ORM]
-        Prisma -->|Read/Write| SQLite[(SQLite Database)]
+    subgraph Single Binary
+        Server -->|Static SPA| EmbeddedUI["Embedded Vite + React SPA"]
+        Server -->|API Routes| Auth["Auth (go-oidc + Session Cookies)"]
+        Server -->|API Routes| Portfolio["Portfolio Logic & Math"]
+        Server -->|API Routes| Finance["Finance Client & Cache"]
 
-        Backend -->|Portfolio Operations| Portfolio[Portfolio Logic]
-        Portfolio -->|Portfolio Queries| Prisma
-        Portfolio -->|Quotes| YahooFinance{{Yahoo Finance API}}
-        Portfolio -->|Exchange Rates| Frankfurter{{Frankfurter API}}
+        Auth -->|Read/Write| SQLite[("SQLite (modernc.org/sqlite)")]
+        Portfolio -->|Read/Write| SQLite
+        Finance -->|Read/Write| SQLite
     end
 
-    NextAuth -->|OIDC| ExternalOIDC[OIDC Provider]
+    Auth -->|OIDC| ExternalOIDC[OIDC Provider]
+    Finance -->|Quotes & Splits| YahooFinance{{Yahoo Finance API}}
+    Finance -->|Exchange Rates| Frankfurter{{Frankfurter API}}
 ```
 
 ---
@@ -217,37 +230,35 @@ graph TD
 
 ```
 /
-├── prisma/                  # Database schema & migrations
-│   ├── schema.prisma        # Prisma schema definition
-│   └── migrations/          # SQLite database migrations
-├── src/
-│   ├── app/                 # Next.js App Router
-│   │   ├── api/             # Backend API Route Handlers
-│   │   │   ├── auth/        # NextAuth API configuration
-│   │   │   ├── finance/     # Live stock search endpoints
-│   │   │   └── portfolio/   # Portfolio summary, history, import/export, transactions operations
-│   │   ├── globals.css      # Global Styles (Tailwind v4 imports)
-│   │   ├── layout.tsx       # Root layout & providers
-│   │   └── page.tsx         # Dashboard main page (UI & client logic)
-│   ├── components/          # Shared React components
-│   ├── lib/                 # Business logic & utilities
-│   │   ├── finance.ts       # Yahoo Finance & Frankfurter API clients
-│   │   └── portfolio.ts     # Portfolio aggregation & performance math
-│   └── auth.ts              # NextAuth configuration & handlers
-├── public/                  # Static assets
-├── Dockerfile               # production build
-└── package.json             # Project dependencies and scripts
+├── cmd/
+│   └── hold/                # Application entrypoint (main.go)
+├── internal/
+│   ├── auth/                # OIDC, demo login, & session cookie auth
+│   ├── cache/               # TTL cache helpers
+│   ├── config/              # Environment variable configuration
+│   ├── db/                  # SQLite store, schema, & migrations
+│   ├── finance/             # Yahoo Finance & Frankfurter API clients
+│   ├── portfolio/           # Portfolio aggregation, splits/dividends, CSV import/export
+│   └── server/              # HTTP router, handlers, & SPA fallback
+├── web/                     # Vite + React 19 + Tailwind v4 SPA
+│   ├── embed.go             # go:embed directive for web/dist
+│   ├── public/              # Static assets (favicon, icons)
+│   └── src/                 # Frontend components, hooks, & tests
+├── scripts/                 # Release & deployment scripts
+├── Dockerfile               # Multi-stage Alpine build
+├── go.mod                   # Go module dependencies
+└── go.sum
 ```
 
 ---
 
 ## 🔧 Useful Development Commands
 
-- **Run Linter**: `pnpm lint`
-- **Open Database Studio**: `npx prisma studio` (Visual explorer for your SQLite database)
-- **Generate Prisma Client**: `npx prisma generate` (Run this after making changes to `schema.prisma`)
-- **Create a Database Migration**: `npx prisma migrate dev --name <migration_name>`
-- **Run Tests**: `pnpm test`
-- **Run Tests with coverage**: `pnpm test --coverage`
+- **Run Go Tests (with race detector)**: `go test -race ./...`
+- **Run Go Vet**: `go vet ./...`
+- **Build Static Go Binary**: `CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o hold ./cmd/hold`
+- **Run Frontend Tests**: `pnpm --dir web test`
+- **Typecheck Frontend**: `pnpm --dir web exec tsc --noEmit`
+- **Build Frontend SPA**: `pnpm --dir web build`
 
 ---

@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-# Get the version from package.json
-FULL_VERSION=$(cat package.json | jq -r .version | sed s/\"//g)
+# Get the version from web/package.json
+FULL_VERSION=$(jq -r .version web/package.json)
 MINOR_VERSION=${FULL_VERSION%.*}
 MAJOR_VERSION=${FULL_VERSION%%.*}
 echo "* Full Version:  $FULL_VERSION"

@@ -1,13 +1,23 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-oxc";
 import tailwindcss from "@tailwindcss/vite";
+import fs from "fs";
 import path from "path";
 
 export default defineConfig({
-    plugins: [react(), tailwindcss()],
+    plugins: [
+        react(),
+        tailwindcss(),
+        {
+            name: "preserve-gitkeep",
+            closeBundle() {
+                fs.writeFileSync(path.resolve(import.meta.dirname, "dist/.gitkeep"), "");
+            },
+        },
+    ],
     resolve: {
         alias: {
-            "@": path.resolve(__dirname, "./src"),
+            "@": path.resolve(import.meta.dirname, "./src"),
         },
     },
     server: {

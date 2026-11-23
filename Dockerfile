@@ -1,49 +1,43 @@
-# Stage 1: Build base (contains Node, pnpm, and build tools)
-FROM node:24-alpine AS builder
-RUN apk add --no-cache libc6-compat openssl
+# Stage 1: Build Vite + React SPA
+FROM node:24-alpine AS web-builder
 RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
-# Generate Prisma client
-COPY prisma prisma
-RUN pnpm prisma generate
-RUN rm -f prisma/hold.db && \
-    DATABASE_URL=file:hold.db pnpm prisma migrate deploy
+COPY web/ ./
+RUN pnpm build
 
-# Build project
-COPY tsconfig.json next.config.ts postcss.config.mjs eslint.config.mjs ./
-COPY src src
-RUN pnpm build && \
-    cp -r .next/static .next/standalone/.next/static
+# Stage 2: Build static Go binary with embedded SPA
+FROM golang:1.26-alpine AS go-builder
+WORKDIR /src
 
-# Stage 2: Production runner
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY cmd/ ./cmd/
+COPY internal/ ./internal/
+COPY web/embed.go ./web/embed.go
+COPY --from=web-builder /app/dist ./web/dist
+
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/hold ./cmd/hold
+
+# Stage 3: Minimal Alpine runtime
 FROM alpine:latest AS runner
-RUN apk add --no-cache nodejs libc6-compat openssl upx && \
-    upx --best --lzma /usr/bin/node && \
-    apk del upx
+RUN apk add --no-cache ca-certificates tzdata && \
+    addgroup --system --gid 1000 hold && \
+    adduser --system --uid 1000 --ingroup hold hold && \
+    mkdir -p /app/data && \
+    chown -R 1000:1000 /app
+
 WORKDIR /app
+COPY --from=go-builder --chown=1000:1000 /out/hold /app/hold
 
-RUN addgroup --system --gid 1000 node && \
-    adduser --system --uid 1000 node && \
-    chown node:node /app
-USER node:node
-
-# Copy standalone folder (builder populated it with static folder)
-COPY --from=builder --chown=node:node /app/.next/standalone .
-# Copy prisma schema and migrated hold.db for runtime access
-COPY --from=builder --chown=node:node /app/prisma prisma
-# Copy and set entrypoint script
-COPY --chown=node:node public public
-COPY --chown=node:node docker-entrypoint.sh .
+USER 1000:1000
 
 EXPOSE 3000
 ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
+ENV DATABASE_URL=/app/data/hold.db
 
-ENTRYPOINT ["./docker-entrypoint.sh"]
-CMD ["node", "server.js"]
+ENTRYPOINT ["/app/hold"]
