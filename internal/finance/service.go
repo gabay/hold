@@ -16,6 +16,11 @@ import (
 // when refreshing incremental market history.
 const FetchBufferDays = 2
 
+// MaxLeadingGapDays is the maximum calendar-day gap allowed between a requested
+// fromDate and the earliest cached row for the cache to be considered covering
+// fromDate (accommodates weekends and multi-day market holidays).
+const MaxLeadingGapDays = 7
+
 // AssetInfo holds market metadata, adjusted daily prices, dividends, and splits.
 type AssetInfo struct {
 	Symbol    string
@@ -65,9 +70,19 @@ func NewService(store *db.Store, yahoo *YahooClient, frankfurter *FrankfurterCli
 	}
 }
 
-func bufferedFetchStart(fromDate time.Time, latestStored string, hasLatest bool) time.Time {
+func bufferedFetchStart(fromDate time.Time, earliestStored, latestStored string, hasRows bool) time.Time {
 	fromNorm := NormalizeDate(fromDate)
-	if !hasLatest || latestStored == "" {
+	if !hasRows || earliestStored == "" || latestStored == "" {
+		return fromNorm
+	}
+	earliestTime, err := ParseDateKey(earliestStored)
+	if err != nil {
+		return fromNorm
+	}
+	// If the earliest cached row starts significantly after fromDate (e.g. only
+	// today was cached during transaction validation, or an older transaction
+	// was added later), fetch the full range from fromDate to backfill the gap.
+	if earliestTime.After(AddDays(fromNorm, MaxLeadingGapDays)) {
 		return fromNorm
 	}
 	latestTime, err := ParseDateKey(latestStored)
@@ -136,12 +151,13 @@ func (s *Service) GetAssetInfo(ctx context.Context, symbol string, fromDate time
 		if err != nil {
 			return nil, fmt.Errorf("get cached stock prices: %w", err)
 		}
-		latestDate, hasLatest, err := s.store.GetLatestStockPriceDate(ctx, upperSymbol)
-		if err != nil {
-			return nil, fmt.Errorf("get latest stock price date: %w", err)
-		}
 
-		fetchStart := bufferedFetchStart(fromNorm, latestDate, hasLatest)
+		var earliestDate, latestDate string
+		if len(existingRows) > 0 {
+			earliestDate = existingRows[0].Date
+			latestDate = existingRows[len(existingRows)-1].Date
+		}
+		fetchStart := bufferedFetchStart(fromNorm, earliestDate, latestDate, len(existingRows) > 0)
 		chart, err := s.yahoo.FetchChart(ctx, upperSymbol, fetchStart, s.now().UTC())
 		if err != nil {
 			return nil, err
@@ -317,12 +333,13 @@ func (s *Service) GetExchangeRates(ctx context.Context, baseCurrency, targetCurr
 		if err != nil {
 			return nil, fmt.Errorf("get cached exchange rates: %w", err)
 		}
-		latestDate, hasLatest, err := s.store.GetLatestExchangeRateDate(ctx, base, target)
-		if err != nil {
-			return nil, fmt.Errorf("get latest exchange rate date: %w", err)
-		}
 
-		fetchStart := bufferedFetchStart(fromNorm, latestDate, hasLatest)
+		var earliestDate, latestDate string
+		if len(existingRows) > 0 {
+			earliestDate = existingRows[0].Date
+			latestDate = existingRows[len(existingRows)-1].Date
+		}
+		fetchStart := bufferedFetchStart(fromNorm, earliestDate, latestDate, len(existingRows) > 0)
 		freshRates, err := s.frankfurter.FetchRates(ctx, base, target, fetchStart)
 		if err != nil {
 			return nil, err

@@ -71,7 +71,12 @@ func (s *Server) validateTransactionPayload(r *http.Request) (db.Transaction, in
 		return db.Transaction{}, http.StatusBadRequest, err.Error()
 	}
 
-	assetInfo, err := s.finance.GetAssetInfo(r.Context(), symbol, time.Now().UTC(), "")
+	fetchFrom := txDate
+	now := time.Now().UTC()
+	if fetchFrom.After(now) {
+		fetchFrom = now
+	}
+	assetInfo, err := s.finance.GetAssetInfo(r.Context(), symbol, fetchFrom, "")
 	if err != nil {
 		return db.Transaction{}, http.StatusBadRequest, fmt.Sprintf("Could not validate ticker symbol %q. Is it correct?", symbol)
 	}

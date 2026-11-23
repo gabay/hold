@@ -433,3 +433,84 @@ func TestYahooChartNullClosesAndSearch(t *testing.T) {
 		t.Fatalf("expected 3 filtered search results, got %+v", res)
 	}
 }
+
+func TestBackfillWhenOnlyRecentDatesCached(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t)
+
+	// Simulate only recent prices cached (e.g. from validating a symbol on today's date).
+	if err := store.UpsertStockPrices(ctx, "AAPL", []db.StockPriceRow{
+		{Symbol: "AAPL", Date: "2026-04-17", Price: 210},
+	}); err != nil {
+		t.Fatalf("seed recent stock price: %v", err)
+	}
+	if err := store.UpsertExchangeRates(ctx, "EUR", "USD", []db.ExchangeRateRow{
+		{BaseCurrency: "EUR", TargetCurrency: "USD", Date: "2026-04-17", Rate: 1.08},
+	}); err != nil {
+		t.Fatalf("seed recent exchange rate: %v", err)
+	}
+
+	var gotYahooPeriod1 string
+	yahooSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotYahooPeriod1 = r.URL.Query().Get("period1")
+		tsOld := time.Date(2025, 4, 21, 14, 30, 0, 0, time.UTC).Unix()
+		tsNew := time.Date(2026, 4, 17, 14, 30, 0, 0, time.UTC).Unix()
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"chart": map[string]any{
+				"result": []any{
+					map[string]any{
+						"meta": map[string]any{
+							"symbol":             "AAPL",
+							"shortName":          "Apple Inc.",
+							"currency":           "USD",
+							"regularMarketPrice": 210.0,
+						},
+						"timestamp": []int64{tsOld, tsNew},
+						"indicators": map[string]any{
+							"quote": []any{
+								map[string]any{"close": []any{175.0, 210.0}},
+							},
+						},
+					},
+				},
+			},
+		})
+	}))
+	defer yahooSrv.Close()
+
+	var gotFXFrom string
+	fxSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotFXFrom = r.URL.Query().Get("from")
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{"date": "2025-04-21", "rate": 1.05},
+			{"date": "2026-04-17", "rate": 1.08},
+		})
+	}))
+	defer fxSrv.Close()
+
+	svc := NewService(store, NewYahooClient(yahooSrv.URL), NewFrankfurterClient(fxSrv.URL))
+	oneYearAgo := time.Date(2025, 4, 20, 0, 0, 0, 0, time.UTC)
+
+	info, err := svc.GetAssetInfo(ctx, "AAPL", oneYearAgo, "")
+	if err != nil {
+		t.Fatalf("GetAssetInfo error: %v", err)
+	}
+	// Must fetch from oneYearAgo (not 2026-04-15) because cache had a leading gap.
+	if gotYahooPeriod1 != "1745107200" {
+		t.Fatalf("expected Yahoo period1=%d (2025-04-20), got %s", oneYearAgo.Unix(), gotYahooPeriod1)
+	}
+	if info.Prices["2025-04-21"] != 175.0 || info.Prices["2026-04-17"] != 210.0 {
+		t.Fatalf("expected backfilled historical prices, got %+v", info.Prices)
+	}
+
+	rates, err := svc.GetExchangeRates(ctx, "EUR", "USD", oneYearAgo)
+	if err != nil {
+		t.Fatalf("GetExchangeRates error: %v", err)
+	}
+	if gotFXFrom != "2025-04-20" {
+		t.Fatalf("expected Frankfurter from=2025-04-20, got %s", gotFXFrom)
+	}
+	if rates.Rates["2025-04-21"] != 1.05 || rates.Rates["2026-04-17"] != 1.08 {
+		t.Fatalf("expected backfilled historical rates, got %+v", rates.Rates)
+	}
+}
