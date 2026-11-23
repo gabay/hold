@@ -3,6 +3,11 @@ module github.com/gabay/hold
 go 1.26.2
 
 require (
+	golang.org/x/sync v0.25.0
+	modernc.org/sqlite v1.63.0
+)
+
+require (
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
@@ -12,5 +17,4 @@ require (
 	modernc.org/libc v1.80.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
-	modernc.org/sqlite v1.63.0 // indirect
 )
